@@ -7,17 +7,31 @@ A sport training application for Linux, built with GTK 4 and libadwaita.
 - **Round Timer** — Configurable rounds, duration, and pause periods with audio alerts
 - **Training Plan Builder** — Create plans with timed and rep-based exercises
 - **Built-in Exercise Database** — 873 exercises with images from [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (Unlicense)
-- **8 Default Training Plans** — Bodyweight, barbell, kettlebell, sling trainer, and more
-- **Training History** — Per-session detail with per-exercise logging (actual vs planned)
+- **11 Default Training Plans** — Including pop culture-inspired plans (Saitama, Demon Slayer Corps, Rocky)
+- **Training History** — Per-session detail with per-exercise logging (actual vs planned), CSV export/import
 - **Customizable Sounds** — Choose different sounds for round start, round end, exercise complete, and training complete
 - **Fullscreen Mode** — F11 or header bar button for distraction-free workouts
 - **Add Custom Exercises** — Add your own exercises with custom images
 
 ## Screenshots
 
-| Round Timer | Training Plan | Preferences |
-|---|---|---|
-| ![Round Timer](screenshots/round-timer.png) | ![Training Plan](screenshots/training-plan.png) | ![Preferences](screenshots/preferences.png) |
+### Round Timer
+![Round Timer](screenshots/RoundTimer.png)
+
+### Training Plans
+![Training Plans List](screenshots/TrainingPlans.png)
+
+### Training Plan Editor
+![Training Plan Editor](screenshots/TrainingPlans2.png)
+
+### Training Plan Runner
+![Training Plan Runner](screenshots/TrainingPlans3.png)
+
+### Training History
+![Training History](screenshots/TrainingHistory.png)
+
+### Settings
+![Training Settings](screenshots/TrainingSettings.png)
 
 ## Installation
 
@@ -58,6 +72,9 @@ Requires: Python 3.9+, GTK 4, libadwaita, GStreamer, PyGObject
 | Kettlebell Full Body | 6 | Swings, cleans, presses |
 | Kettlebell Strength and Power | 6 | Snatches, windmills, Turkish get-ups |
 | Sling Trainer Full Body | 6 | Suspension trainer exercises |
+| Saitama's Workout | 4 | 100 push-ups, 100 sit-ups, 100 squats, 10km run |
+| Demon Slayer Corps Training | 7 | High-intensity bodyweight circuit |
+| Rocky Balboa's Training | 7 | Jump rope, pushups, dips, lunges, calf raises |
 
 ## Credits
 

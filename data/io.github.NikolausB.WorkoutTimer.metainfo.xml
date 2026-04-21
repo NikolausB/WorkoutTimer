@@ -16,13 +16,13 @@
       <li>Configurable round timer with adjustable rounds, duration, and pause</li>
       <li>Training plan builder with timed and rep-based exercises</li>
       <li>Built-in exercise database with 873 exercises and images</li>
-      <li>8 pre-built default training plans</li>
-      <li>Training history with per-exercise logging</li>
+      <li>11 pre-built default training plans, including pop culture-inspired workouts</li>
+      <li>Training history with per-exercise logging and CSV export/import</li>
       <li>Customizable sound effects for different events</li>
       <li>Fullscreen mode for workout sessions</li>
     </ul>
   </description>
-  <developer id="io.github.NikolausB">
+  <developer id="io.github.nikolausb">
     <name>NikolausB</name>
   </developer>
   <launchable type="desktop-id">io.github.NikolausB.WorkoutTimer.desktop</launchable>
@@ -32,6 +32,32 @@
     <color type="primary" scheme_preference="light">#4CAF50</color>
     <color type="primary" scheme_preference="dark">#2E7D32</color>
   </branding>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Round Timer</caption>
+      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/RoundTimer.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Training Plans</caption>
+      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/TrainingPlans.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Training Plan Editor</caption>
+      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/TrainingPlans2.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Training Plan Runner</caption>
+      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/TrainingPlans3.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Training History</caption>
+      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/TrainingHistory.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Settings</caption>
+      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/TrainingSettings.png</image>
+    </screenshot>
+  </screenshots>
   <provides>
     <binary>training</binary>
   </provides>
