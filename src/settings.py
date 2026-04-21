@@ -26,6 +26,13 @@ DEFAULT_SETTINGS = {
     "show_home_page": True,
     "show_timer_page": True,
     "show_workout_page": True,
+    "show_ai_page": False,
+    "ai_provider": "ollama",
+    "ai_model": "llama3.2",
+    "ai_base_url": "http://localhost:11434/v1",
+    "ai_api_key": "",
+    "ai_include_history": True,
+    "ai_system_prompt": "",
 }
 
 
@@ -41,6 +48,13 @@ class AppSettings:
     show_home_page: bool = True
     show_timer_page: bool = True
     show_workout_page: bool = True
+    show_ai_page: bool = False
+    ai_provider: str = "ollama"
+    ai_model: str = "llama3.2"
+    ai_base_url: str = "http://localhost:11434/v1"
+    ai_api_key: str = ""
+    ai_include_history: bool = True
+    ai_system_prompt: str = ""
 
     def get_sound(self, event_key: str) -> str | None:
         if not self.sound_enabled:

@@ -49,6 +49,8 @@ class TrainingPlan:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     exercises: list[Exercise] = field(default_factory=list)
+    total_rounds: int = 1
+    rest_between_rounds_seconds: int = 60
     created: datetime = field(default_factory=datetime.now)
 
     def total_planned_seconds(self) -> int:
@@ -57,6 +59,9 @@ class TrainingPlan:
             if ex.duration_seconds:
                 total += ex.duration_seconds
             total += ex.rest_seconds
+        total *= self.total_rounds
+        if self.total_rounds > 1 and self.rest_between_rounds_seconds > 0:
+            total += self.rest_between_rounds_seconds * (self.total_rounds - 1)
         return total
 
     def to_dict(self) -> dict:
@@ -64,6 +69,8 @@ class TrainingPlan:
             "id": self.id,
             "name": self.name,
             "exercises": [e.to_dict() for e in self.exercises],
+            "total_rounds": self.total_rounds,
+            "rest_between_rounds_seconds": self.rest_between_rounds_seconds,
             "created": self.created.isoformat(),
         }
 
@@ -73,6 +80,8 @@ class TrainingPlan:
             id=d.get("id", str(uuid.uuid4())),
             name=d.get("name", ""),
             exercises=[Exercise.from_dict(e) for e in d.get("exercises", [])],
+            total_rounds=d.get("total_rounds", 1),
+            rest_between_rounds_seconds=d.get("rest_between_rounds_seconds", 60),
             created=datetime.fromisoformat(d["created"]) if "created" in d else datetime.now(),
         )
 
@@ -88,6 +97,7 @@ class ExerciseLog:
     actual_rest_seconds: Optional[int] = None
     completed: bool = True
     image_path: Optional[str] = None
+    round_number: int = 1
 
     def to_dict(self) -> dict:
         d = {
@@ -99,6 +109,7 @@ class ExerciseLog:
             "rest_seconds": self.rest_seconds,
             "actual_rest_seconds": self.actual_rest_seconds,
             "completed": self.completed,
+            "round_number": self.round_number,
         }
         if self.image_path is not None:
             d["image_path"] = self.image_path
@@ -116,6 +127,7 @@ class ExerciseLog:
             actual_rest_seconds=d.get("actual_rest_seconds"),
             completed=d.get("completed", True),
             image_path=d.get("image_path"),
+            round_number=d.get("round_number", 1),
         )
 
 
@@ -128,6 +140,8 @@ class TrainingSession:
     finished_at: Optional[datetime] = None
     total_planned_seconds: int = 0
     total_actual_seconds: int = 0
+    total_rounds: int = 1
+    rest_between_rounds_seconds: int = 0
     exercises: list[ExerciseLog] = field(default_factory=list)
 
     def compute_total_actual_seconds(self) -> int:
@@ -150,6 +164,8 @@ class TrainingSession:
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
             "total_planned_seconds": self.total_planned_seconds,
             "total_actual_seconds": self.compute_total_actual_seconds(),
+            "total_rounds": self.total_rounds,
+            "rest_between_rounds_seconds": self.rest_between_rounds_seconds,
             "exercises": [e.to_dict() for e in self.exercises],
         }
 
@@ -163,5 +179,7 @@ class TrainingSession:
             finished_at=datetime.fromisoformat(d["finished_at"]) if d.get("finished_at") else None,
             total_planned_seconds=d.get("total_planned_seconds", 0),
             total_actual_seconds=d.get("total_actual_seconds", 0),
+            total_rounds=d.get("total_rounds", 1),
+            rest_between_rounds_seconds=d.get("rest_between_rounds_seconds", 0),
             exercises=[ExerciseLog.from_dict(e) for e in d.get("exercises", [])],
         )

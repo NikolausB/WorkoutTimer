@@ -71,10 +71,11 @@ class HomePage(Adw.Bin):
         plan_name = plan.name if plan else last.plan_name
         date_str = last.started_at.strftime("%Y-%m-%d %H:%M")
         ex_count = len(last.exercises)
+        rounds_str = f" ({plan.total_rounds} rounds)" if plan and plan.total_rounds > 1 else ""
 
         row = Adw.ActionRow(
             title=plan_name,
-            subtitle=f"Last: {date_str} | {ex_count} exercises",
+            subtitle=f"Last: {date_str} | {ex_count} exercises{rounds_str}",
         )
 
         if plan:
@@ -112,6 +113,9 @@ class HomePage(Adw.Bin):
             title=recommended.name,
             subtitle=subtitle,
         )
+        if recommended.total_rounds > 1:
+            rbr_str = f", {recommended.rest_between_rounds_seconds}s rest" if recommended.rest_between_rounds_seconds > 0 else ""
+            row.set_subtitle(f"{subtitle} ({recommended.total_rounds} rounds{rbr_str})")
         open_btn = Gtk.Button(label="Open", css_classes=["suggested-action", "flat"])
         open_btn.connect("clicked", lambda _, p=recommended: self._open_plan(p))
         row.add_suffix(open_btn)

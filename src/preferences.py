@@ -127,6 +127,13 @@ class PreferencesDialog(Adw.Dialog):
         self._workout_switch.set_active(self._settings.show_workout_page)
         tabs_group.add(self._workout_switch)
 
+        self._ai_switch = Adw.SwitchRow(
+            title="Show AI Coach",
+            subtitle="AI-powered training plan generator (requires network access)",
+        )
+        self._ai_switch.set_active(self._settings.show_ai_page)
+        tabs_group.add(self._ai_switch)
+
         box.append(tabs_group)
 
         save_btn = Gtk.Button(label="Save", css_classes=["suggested-action"], halign=Gtk.Align.END)
@@ -179,5 +186,6 @@ class PreferencesDialog(Adw.Dialog):
         global_settings.show_home_page = self._home_switch.get_active()
         global_settings.show_timer_page = self._timer_switch.get_active()
         global_settings.show_workout_page = self._workout_switch.get_active()
+        global_settings.show_ai_page = self._ai_switch.get_active()
         save_settings(global_settings)
         self.close()

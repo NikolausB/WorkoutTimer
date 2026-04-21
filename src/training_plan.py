@@ -17,6 +17,8 @@ class TrainingPlanPage(Adw.Bin):
         self._running_session: TrainingSession | None = None
         self._running_plan: TrainingPlan | None = None
         self._current_exercise_idx = 0
+        self._current_round = 1
+        self._total_rounds = 1
         self._phase = "exercise"
         self._exercise_start_time: float = 0
         self._timer = TimerCore()
@@ -26,7 +28,7 @@ class TrainingPlanPage(Adw.Bin):
         self._editor_exercises: list[Exercise] = []
         self._exercise_rows: list[Adw.ExpanderRow] = []
         self._build_ui()
-        self._refresh_plans()
+        self.refresh_plans()
 
     def _build_ui(self):
         self._stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
@@ -84,6 +86,15 @@ class TrainingPlanPage(Adw.Bin):
         self._plan_name_entry = Adw.EntryRow(title="Plan Name")
         name_group = Adw.PreferencesGroup()
         name_group.add(self._plan_name_entry)
+
+        rounds_adj = Gtk.Adjustment(value=1, lower=1, upper=20, step_increment=1)
+        self._total_rounds_spin = Adw.SpinRow(title="Total Rounds", subtitle="How many times to repeat all exercises", adjustment=rounds_adj)
+        name_group.add(self._total_rounds_spin)
+
+        rest_rounds_adj = Gtk.Adjustment(value=60, lower=0, upper=600, step_increment=5)
+        self._rest_between_rounds_spin = Adw.SpinRow(title="Rest Between Rounds (seconds)", subtitle="Pause between rounds when total rounds > 1", adjustment=rest_rounds_adj)
+        name_group.add(self._rest_between_rounds_spin)
+
         box.append(name_group)
 
         exercises_label = Gtk.Label(label="Exercises", css_classes=["title-2"])
@@ -215,10 +226,18 @@ class TrainingPlanPage(Adw.Bin):
             self._summary_exercises_box.remove(child)
 
         group = Adw.PreferencesGroup()
-        group.set_title("Exercises")
+        show_rounds = session.total_rounds > 1
+        group_title = "Exercises"
+        if show_rounds:
+            rbr_str = f", {session.rest_between_rounds_seconds}s rest between" if session.rest_between_rounds_seconds > 0 else ""
+            group_title = f"Exercises ({session.total_rounds} rounds{rbr_str})"
+        group.set_title(group_title)
 
         for ex_log in session.exercises:
-            row = Adw.ActionRow(title=ex_log.exercise_name)
+            title = ex_log.exercise_name
+            if show_rounds and ex_log.round_number > 1:
+                title = f"R{ex_log.round_number}: {ex_log.exercise_name}"
+            row = Adw.ActionRow(title=title)
 
             if app_settings.show_exercise_images:
                 thumb = load_thumbnail_widget(ex_log.image_path, 36)
@@ -257,7 +276,7 @@ class TrainingPlanPage(Adw.Bin):
         return f"{s // 60:02d}:{s % 60:02d}"
 
     def _show_list(self):
-        self._refresh_plans()
+        self.refresh_plans()
         self._stack.set_visible_child_name("main")
 
     def _show_editor(self, plan: TrainingPlan | None = None):
@@ -269,10 +288,14 @@ class TrainingPlanPage(Adw.Bin):
         if plan:
             self._editing_plan_id = plan.id
             self._plan_name_entry.set_text(plan.name)
+            self._total_rounds_spin.set_value(plan.total_rounds)
+            self._rest_between_rounds_spin.set_value(plan.rest_between_rounds_seconds)
             self._editor_exercises = [Exercise.from_dict(e.to_dict()) for e in plan.exercises]
         else:
             self._editing_plan_id = None
             self._plan_name_entry.set_text("")
+            self._total_rounds_spin.set_value(1)
+            self._rest_between_rounds_spin.set_value(60)
 
         for ex in self._editor_exercises:
             self._append_exercise_row(ex)
@@ -477,7 +500,7 @@ class TrainingPlanPage(Adw.Bin):
         for exercise in self._editor_exercises:
             self._append_exercise_row(exercise)
 
-    def _refresh_plans(self):
+    def refresh_plans(self):
         row = self._plan_list_box.get_row_at_index(0)
         while row is not None:
             self._plan_list_box.remove(row)
@@ -490,7 +513,9 @@ class TrainingPlanPage(Adw.Bin):
             return
 
         for plan in self._plans:
-            row = Adw.ActionRow(title=plan.name, subtitle=f"{len(plan.exercises)} exercises")
+            rounds_str = f" ({plan.total_rounds} rounds)" if plan.total_rounds > 1 else ""
+            rbr_str = f", {plan.rest_between_rounds_seconds}s rest between rounds" if plan.total_rounds > 1 and plan.rest_between_rounds_seconds > 0 else ""
+            row = Adw.ActionRow(title=plan.name, subtitle=f"{len(plan.exercises)} exercises{rounds_str}{rbr_str}")
             row.set_activatable(True)
             self._plan_list_box.append(row)
 
@@ -529,9 +554,11 @@ class TrainingPlanPage(Adw.Bin):
             if plan:
                 plan.name = name
                 plan.exercises = [e for e in self._editor_exercises if e.name.strip()]
+                plan.total_rounds = int(self._total_rounds_spin.get_value())
+                plan.rest_between_rounds_seconds = int(self._rest_between_rounds_spin.get_value())
                 self._store.save_plan(plan)
         else:
-            plan = TrainingPlan(name=name, exercises=[e for e in self._editor_exercises if e.name.strip()])
+            plan = TrainingPlan(name=name, exercises=[e for e in self._editor_exercises if e.name.strip()], total_rounds=int(self._total_rounds_spin.get_value()), rest_between_rounds_seconds=int(self._rest_between_rounds_spin.get_value()))
             self._store.save_plan(plan)
             self._editing_plan_id = plan.id
 
@@ -571,18 +598,29 @@ class TrainingPlanPage(Adw.Bin):
     def _start_training(self, plan: TrainingPlan):
         self._running_plan = plan
         self._current_exercise_idx = 0
+        self._current_round = 1
+        self._total_rounds = plan.total_rounds or 1
+        self._rest_between_rounds = plan.rest_between_rounds_seconds or 0
         self._phase = "exercise"
 
         self._running_session = TrainingSession(
             plan_id=plan.id,
             plan_name=plan.name,
             total_planned_seconds=plan.total_planned_seconds(),
+            total_rounds=plan.total_rounds or 1,
+            rest_between_rounds_seconds=plan.rest_between_rounds_seconds or 0,
             exercises=[],
         )
 
-        self._runner_plan_label.set_label(plan.name)
+        self._update_runner_plan_label()
         self._stack.set_visible_child_name("runner")
         self._start_current_exercise()
+
+    def _update_runner_plan_label(self):
+        if self._total_rounds > 1:
+            self._runner_plan_label.set_label(f"{self._running_plan.name} — Round {self._current_round}/{self._total_rounds}")
+        else:
+            self._runner_plan_label.set_label(self._running_plan.name)
 
     def _start_current_exercise(self):
         if self._current_exercise_idx >= len(self._running_plan.exercises):
@@ -604,6 +642,9 @@ class TrainingPlanPage(Adw.Bin):
         next_idx = self._current_exercise_idx + 1
         if next_idx < len(self._running_plan.exercises):
             self._runner_next_label.set_label(f"Next: {self._running_plan.exercises[next_idx].name}")
+        elif self._current_round < self._total_rounds:
+            next_round = self._current_round + 1
+            self._runner_next_label.set_label(f"Next: Round {next_round}: {self._running_plan.exercises[0].name}")
         else:
             self._runner_next_label.set_label("Last exercise!")
 
@@ -632,7 +673,37 @@ class TrainingPlanPage(Adw.Bin):
 
     def _advance_exercise(self):
         self._current_exercise_idx += 1
-        self._start_current_exercise()
+        if self._current_exercise_idx >= len(self._running_plan.exercises):
+            if self._current_round < self._total_rounds:
+                if self._rest_between_rounds > 0:
+                    self._start_round_break()
+                else:
+                    self._current_round += 1
+                    self._current_exercise_idx = 0
+                    self._update_runner_plan_label()
+                    sound_player.play_sound(app_settings.get_sound("round_start_sound"))
+                    self._start_current_exercise()
+            else:
+                self._finish_training()
+        else:
+            self._start_current_exercise()
+
+    def _start_round_break(self):
+        self._phase = "round_break"
+        self._current_round += 1
+        self._current_exercise_idx = 0
+        self._update_runner_plan_label()
+        self._runner_exercise_label.set_label("Round Break")
+        self._runner_phase_label.set_label(f"Next: Round {self._current_round}")
+        self._reps_box.set_visible(False)
+
+        while child := self._runner_image.get_first_child():
+            self._runner_image.remove(child)
+        self._runner_image.set_visible(False)
+
+        self._runner_next_label.set_label(f"Next: {self._running_plan.exercises[0].name}")
+        sound_player.play_sound(app_settings.get_sound("round_end_sound"))
+        self._timer.start(self._rest_between_rounds)
 
     def _finish_training(self):
         self._timer.stop()
@@ -654,6 +725,11 @@ class TrainingPlanPage(Adw.Bin):
         self._runner_countdown.set_label(f"{mins:02d}:{secs:02d}")
 
     def _on_timer_finished(self):
+        if self._phase == "round_break":
+            sound_player.play_sound(app_settings.get_sound("round_start_sound"))
+            self._start_current_exercise()
+            return
+
         ex = self._running_plan.exercises[self._current_exercise_idx]
         sound_player.play_sound(app_settings.get_sound("exercise_complete_sound"))
 
@@ -668,6 +744,7 @@ class TrainingPlanPage(Adw.Bin):
                 rest_seconds=ex.rest_seconds,
                 completed=True,
                 image_path=ex.image_path,
+                round_number=self._current_round,
             )
             self._running_session.exercises.append(ex_log)
             self._start_rest()
@@ -689,6 +766,7 @@ class TrainingPlanPage(Adw.Bin):
             rest_seconds=ex.rest_seconds,
             completed=True,
             image_path=ex.image_path,
+            round_number=self._current_round,
         )
         self._running_session.exercises.append(ex_log)
         sound_player.play_sound(app_settings.get_sound("exercise_complete_sound"))
@@ -706,6 +784,10 @@ class TrainingPlanPage(Adw.Bin):
     def _on_runner_skip(self, btn):
         self._timer.stop()
 
+        if self._phase == "round_break":
+            self._start_current_exercise()
+            return
+
         ex = self._running_plan.exercises[self._current_exercise_idx]
 
         if self._phase == "exercise":
@@ -719,6 +801,7 @@ class TrainingPlanPage(Adw.Bin):
                 rest_seconds=ex.rest_seconds,
                 completed=False,
                 image_path=ex.image_path,
+                round_number=self._current_round,
             )
             self._running_session.exercises.append(ex_log)
             self._start_rest()

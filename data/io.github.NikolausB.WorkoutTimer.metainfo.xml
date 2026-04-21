@@ -8,13 +8,16 @@
   <description>
     <p>
       A sport training application for Linux. Features a configurable round timer
-      with pause periods and audio alerts, and a training plan builder where you can
-      create plans with timed exercises and rep-based movements.
+      with pause periods and audio alerts, a training plan builder with multi-round
+      circuit support, and an AI coach for generating personalized plans.
     </p>
     <p>Features:</p>
     <ul>
+      <li>Home page with quick access to recent and recommended workouts</li>
       <li>Configurable round timer with adjustable rounds, duration, and pause</li>
       <li>Training plan builder with timed and rep-based exercises</li>
+      <li>Multi-round circuits with configurable rest between rounds</li>
+      <li>AI coach for generating training plans with local or cloud LLMs</li>
       <li>Built-in exercise database with 873 exercises and images</li>
       <li>11 pre-built default training plans, including pop culture-inspired workouts</li>
       <li>Training history with per-exercise logging and CSV export/import</li>
@@ -34,6 +37,10 @@
   </branding>
   <screenshots>
     <screenshot type="default">
+      <caption>Home Page</caption>
+      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/Home.png</image>
+    </screenshot>
+    <screenshot>
       <caption>Round Timer</caption>
       <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/RoundTimer.png</image>
     </screenshot>
@@ -48,6 +55,14 @@
     <screenshot>
       <caption>Training Plan Runner</caption>
       <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/TrainingPlans3.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>AI Coach</caption>
+      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/AI_Coach.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>AI Coach — Generated Plan</caption>
+      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/AI_Coach2.png</image>
     </screenshot>
     <screenshot>
       <caption>Training History</caption>
@@ -73,11 +88,13 @@
     <keyword>round</keyword>
     <keyword>exercise</keyword>
     <keyword>fitness</keyword>
+    <keyword>circuit</keyword>
+    <keyword>ai</keyword>
   </keywords>
   <releases>
     <release version="1.0.0" date="2026-04-21">
       <description>
-        <p>Initial release with round timer, training plans, and history.</p>
+        <p>Initial release with round timer, training plans, AI coach, multi-round circuits, and history.</p>
       </description>
     </release>
   </releases>

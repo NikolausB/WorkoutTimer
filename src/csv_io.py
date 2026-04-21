@@ -13,6 +13,8 @@ CSV_HEADER = [
     "finished_at",
     "total_planned_seconds",
     "total_actual_seconds",
+    "total_rounds",
+    "rest_between_rounds_seconds",
     "exercise_name",
     "planned_duration_seconds",
     "actual_duration_seconds",
@@ -21,6 +23,7 @@ CSV_HEADER = [
     "rest_seconds",
     "actual_rest_seconds",
     "completed",
+    "round_number",
 ]
 
 
@@ -39,6 +42,8 @@ def export_history_csv(sessions: list[TrainingSession], filepath: str) -> None:
                     session.finished_at.isoformat() if session.finished_at else "",
                     session.total_planned_seconds,
                     session.compute_total_actual_seconds(),
+                    session.total_rounds,
+                    session.rest_between_rounds_seconds,
                     ex.exercise_name,
                     _fmt(ex.planned_duration_seconds),
                     _fmt(ex.actual_duration_seconds),
@@ -47,6 +52,7 @@ def export_history_csv(sessions: list[TrainingSession], filepath: str) -> None:
                     ex.rest_seconds,
                     _fmt(ex.actual_rest_seconds),
                     "True" if ex.completed else "False",
+                    ex.round_number,
                 ])
 
 
@@ -72,6 +78,8 @@ def import_history_csv(filepath: str) -> list[TrainingSession]:
                     "plan_name": row.get("plan_name", "").strip(),
                     "total_planned_seconds": _int(row.get("total_planned_seconds", "")),
                     "total_actual_seconds": _int(row.get("total_actual_seconds", "")),
+                    "total_rounds": _int(row.get("total_rounds", "1")),
+                    "rest_between_rounds_seconds": _int(row.get("rest_between_rounds_seconds", "0")),
                     "started_at": datetime.fromisoformat(started_str) if started_str else datetime.now(),
                     "finished_at": datetime.fromisoformat(finished_str) if finished_str else None,
                     "exercises": [],
@@ -86,6 +94,7 @@ def import_history_csv(filepath: str) -> list[TrainingSession]:
                 "rest_seconds": _int(row.get("rest_seconds", "0")),
                 "actual_rest_seconds": _blank_to_none_int(row.get("actual_rest_seconds", "")),
                 "completed": row.get("completed", "").strip().lower() in ("true", "1", "yes", "on"),
+                "round_number": _int(row.get("round_number", "1")),
             }
             sessions_by_id[sid]["exercises"].append(ex_log)
 
@@ -96,6 +105,8 @@ def import_history_csv(filepath: str) -> list[TrainingSession]:
             plan_name=data["plan_name"],
             total_planned_seconds=data.get("total_planned_seconds", 0),
             total_actual_seconds=data.get("total_actual_seconds", 0),
+            total_rounds=data.get("total_rounds", 1),
+            rest_between_rounds_seconds=data.get("rest_between_rounds_seconds", 0),
             started_at=data["started_at"],
             finished_at=data.get("finished_at"),
             exercises=[ExerciseLog.from_dict(e) for e in data["exercises"]],

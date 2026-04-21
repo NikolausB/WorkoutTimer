@@ -158,10 +158,18 @@ class HistoryPage(Adw.Bin):
             self._detail_exercises_box.remove(child)
 
         group = Adw.PreferencesGroup()
-        group.set_title("Exercises")
+        show_rounds = session.total_rounds > 1
+        group_title = "Exercises"
+        if show_rounds:
+            rbr_str = f", {session.rest_between_rounds_seconds}s rest between" if session.rest_between_rounds_seconds > 0 else ""
+            group_title = f"Exercises ({session.total_rounds} rounds{rbr_str})"
+        group.set_title(group_title)
 
         for ex_log in session.exercises:
-            row = Adw.ActionRow(title=ex_log.exercise_name)
+            title = ex_log.exercise_name
+            if show_rounds and ex_log.round_number > 1:
+                title = f"R{ex_log.round_number}: {ex_log.exercise_name}"
+            row = Adw.ActionRow(title=title)
 
             if ex_log.planned_duration_seconds is not None:
                 detail = f"Time: {self._fmt_dur(ex_log.actual_duration_seconds)} / {self._fmt_dur(ex_log.planned_duration_seconds)}"

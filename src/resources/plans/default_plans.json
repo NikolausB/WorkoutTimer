@@ -124,6 +124,8 @@
   },
   {
     "name": "HIIT Cardio Blast",
+    "total_rounds": 3,
+    "rest_between_rounds_seconds": 30,
     "exercises": [
       {
         "name": "Burpees",

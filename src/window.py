@@ -3,6 +3,7 @@ from round_timer import RoundTimerPage
 from training_plan import TrainingPlanPage
 from history import HistoryPage
 from home import HomePage
+from ai_coach import AICoachPage
 from data_store import DataStore
 from settings import app_settings
 
@@ -20,12 +21,14 @@ class MainWindow(Adw.ApplicationWindow):
         self._training_plan = TrainingPlanPage(self._store)
         self._history = HistoryPage(self._store)
         self._home = HomePage(self._store, self._training_plan)
+        self._ai_coach = AICoachPage(self._store, on_plan_saved=self._on_ai_plan_saved)
 
         self._stack = Adw.ViewStack()
 
         self._home_page = self._stack.add_titled(self._home, "home", "Home")
         self._timer_page = self._stack.add_titled(self._round_timer, "timer", "Round Timer")
         self._plans_page = self._stack.add_titled(self._training_plan, "plans", "Training Plans")
+        self._ai_page = self._stack.add_titled(self._ai_coach, "ai", "AI Coach")
         self._history_page = self._stack.add_titled(self._history, "history", "History")
 
         self._home._on_switch_to_plans = lambda: self._stack.set_visible_child_name("plans")
@@ -63,10 +66,12 @@ class MainWindow(Adw.ApplicationWindow):
         show_home = app_settings.show_home_page
         show_timer = app_settings.show_timer_page
         show_workout = app_settings.show_workout_page
+        show_ai = app_settings.show_ai_page
 
         self._home_page.set_visible(show_home)
         self._timer_page.set_visible(show_timer)
         self._plans_page.set_visible(show_workout)
+        self._ai_page.set_visible(show_ai)
 
         if show_home:
             self._stack.set_visible_child_name("home")
@@ -74,8 +79,14 @@ class MainWindow(Adw.ApplicationWindow):
             self._stack.set_visible_child_name("timer")
         elif show_workout:
             self._stack.set_visible_child_name("plans")
+        elif show_ai:
+            self._stack.set_visible_child_name("ai")
         else:
             self._stack.set_visible_child_name("history")
+
+    def _on_ai_plan_saved(self):
+        self._training_plan.refresh_plans()
+        self._stack.set_visible_child_name("plans")
 
     def _on_tab_switched(self, stack, param):
         child = stack.get_visible_child()
