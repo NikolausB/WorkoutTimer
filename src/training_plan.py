@@ -280,8 +280,8 @@ class TrainingPlanPage(Adw.Bin):
         self._stack.set_visible_child_name("editor")
 
     def _append_exercise_row(self, exercise: Exercise):
-        row = Adw.ExpanderRow(title=exercise.name or "New Exercise")
-        row.set_expanded(True)
+        row = Adw.ExpanderRow(title=self._exercise_display_title(exercise))
+        row.set_expanded(False)
 
         name_entry = Adw.EntryRow(title="Name")
         name_entry.set_text(exercise.name)
@@ -321,7 +321,22 @@ class TrainingPlanPage(Adw.Bin):
         remove_btn.connect("clicked", lambda _, r=row, e=exercise: self._remove_exercise_row(r, e))
         row.add_row(remove_btn)
 
+        row._reorder_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        row._reorder_box.set_margin_top(6)
+
+        up_btn = Gtk.Button(icon_name="go-up-symbolic", css_classes=["flat"])
+        up_btn.connect("clicked", lambda _, r=row: self._move_exercise_up(r))
+        row._reorder_box.append(up_btn)
+
+        down_btn = Gtk.Button(icon_name="go-down-symbolic", css_classes=["flat"])
+        down_btn.connect("clicked", lambda _, r=row: self._move_exercise_down(r))
+        row._reorder_box.append(down_btn)
+
+        row.add_row(row._reorder_box)
+
         name_entry.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, rest_spin, exercise))
+        dur_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, rest_spin, exercise))
+        reps_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, rest_spin, exercise))
 
         self._exercise_rows.append(row)
         self._exercises_group.add(row)
@@ -386,12 +401,12 @@ class TrainingPlanPage(Adw.Bin):
 
     def _sync_exercise_from_row(self, row, name_entry, dur_spin, reps_spin, rest_spin, exercise):
         exercise.name = name_entry.get_text()
-        row.set_title(exercise.name or "New Exercise")
         dur_val = int(dur_spin.get_value())
         exercise.duration_seconds = dur_val if dur_val > 0 else None
         reps_val = int(reps_spin.get_value())
         exercise.reps = reps_val if reps_val > 0 else None
         exercise.rest_seconds = int(rest_spin.get_value())
+        row.set_title(self._exercise_display_title(exercise))
 
     def _remove_exercise_row(self, row, exercise):
         if exercise in self._editor_exercises:
@@ -399,6 +414,67 @@ class TrainingPlanPage(Adw.Bin):
         self._exercises_group.remove(row)
         if row in self._exercise_rows:
             self._exercise_rows.remove(row)
+
+    def _exercise_display_title(self, exercise: Exercise) -> str:
+        parts = []
+        if exercise.duration_seconds is not None and exercise.duration_seconds > 0:
+            parts.append(f"{exercise.duration_seconds}s")
+        if exercise.reps is not None and exercise.reps > 0:
+            parts.append(f"{exercise.reps} reps")
+        if parts:
+            return f"{exercise.name or 'New Exercise'} ({', '.join(parts)})"
+        return exercise.name or "New Exercise"
+
+    def _move_exercise_up(self, row):
+        idx = self._exercise_rows.index(row)
+        if idx <= 0:
+            return
+        self._sync_all_exercises_from_rows()
+        self._editor_exercises[idx], self._editor_exercises[idx - 1] = self._editor_exercises[idx - 1], self._editor_exercises[idx]
+        self._rebuild_exercise_group()
+
+    def _move_exercise_down(self, row):
+        idx = self._exercise_rows.index(row)
+        if idx < 0 or idx >= len(self._exercise_rows) - 1:
+            return
+        self._sync_all_exercises_from_rows()
+        self._editor_exercises[idx], self._editor_exercises[idx + 1] = self._editor_exercises[idx + 1], self._editor_exercises[idx]
+        self._rebuild_exercise_group()
+
+    def _sync_all_exercises_from_rows(self):
+        for i, row in enumerate(self._exercise_rows):
+            exercise = self._editor_exercises[i]
+            children = self._iter_expander_children(row)
+            name_entry = None
+            dur_spin = None
+            reps_spin = None
+            rest_spin = None
+            for child in children:
+                if isinstance(child, Adw.EntryRow) and child.get_title() == "Name":
+                    name_entry = child
+                elif isinstance(child, Adw.SpinRow) and child.get_title() == "Duration (seconds)":
+                    dur_spin = child
+                elif isinstance(child, Adw.SpinRow) and child.get_title() == "Reps":
+                    reps_spin = child
+                elif isinstance(child, Adw.SpinRow) and child.get_title() == "Rest after (seconds)":
+                    rest_spin = child
+            if name_entry:
+                exercise.name = name_entry.get_text()
+            if dur_spin:
+                dur_val = int(dur_spin.get_value())
+                exercise.duration_seconds = dur_val if dur_val > 0 else None
+            if reps_spin:
+                reps_val = int(reps_spin.get_value())
+                exercise.reps = reps_val if reps_val > 0 else None
+            if rest_spin:
+                exercise.rest_seconds = int(rest_spin.get_value())
+
+    def _rebuild_exercise_group(self):
+        for row in self._exercise_rows:
+            self._exercises_group.remove(row)
+        self._exercise_rows.clear()
+        for exercise in self._editor_exercises:
+            self._append_exercise_row(exercise)
 
     def _refresh_plans(self):
         row = self._plan_list_box.get_row_at_index(0)
