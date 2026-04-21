@@ -565,8 +565,8 @@ class TrainingPlanPage(Adw.Bin):
 
         self._start_training(plan)
 
-    def start_plan(self, plan: TrainingPlan):
-        self._start_training(plan)
+    def open_plan(self, plan: TrainingPlan):
+        self._show_editor(plan)
 
     def _start_training(self, plan: TrainingPlan):
         self._running_plan = plan

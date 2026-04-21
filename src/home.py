@@ -78,9 +78,9 @@ class HomePage(Adw.Bin):
         )
 
         if plan:
-            start_btn = Gtk.Button(label="Start", css_classes=["suggested-action", "flat"])
-            start_btn.connect("clicked", lambda _, p=plan: self._start_plan(p))
-            row.add_suffix(start_btn)
+            open_btn = Gtk.Button(label="Open", css_classes=["suggested-action", "flat"])
+            open_btn.connect("clicked", lambda _, p=plan: self._open_plan(p))
+            row.add_suffix(open_btn)
 
         self._recent_row = row
         self._recent_card.add(row)
@@ -112,15 +112,17 @@ class HomePage(Adw.Bin):
             title=recommended.name,
             subtitle=subtitle,
         )
-        start_btn = Gtk.Button(label="Start", css_classes=["suggested-action", "flat"])
-        start_btn.connect("clicked", lambda _, p=recommended: self._start_plan(p))
-        row.add_suffix(start_btn)
+        open_btn = Gtk.Button(label="Open", css_classes=["suggested-action", "flat"])
+        open_btn.connect("clicked", lambda _, p=recommended: self._open_plan(p))
+        row.add_suffix(open_btn)
 
         self._recommended_row = row
         self._recommended_card.add(row)
 
-    def _start_plan(self, plan: TrainingPlan):
-        self._training_plan_page.start_plan(plan)
+    def _open_plan(self, plan: TrainingPlan):
+        self._training_plan_page.open_plan(plan)
+        if self._on_switch_to_plans:
+            self._on_switch_to_plans()
 
     def _go_to_plans(self):
         if self._on_switch_to_plans:
