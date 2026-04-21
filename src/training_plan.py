@@ -421,9 +421,10 @@ class TrainingPlanPage(Adw.Bin):
             parts.append(f"{exercise.duration_seconds}s")
         if exercise.reps is not None and exercise.reps > 0:
             parts.append(f"{exercise.reps} reps")
+        rest = f"[{exercise.rest_seconds}s rest]" if exercise.rest_seconds > 0 else ""
         if parts:
-            return f"{exercise.name or 'New Exercise'} ({', '.join(parts)})"
-        return exercise.name or "New Exercise"
+            return f"{exercise.name or 'New Exercise'} ({', '.join(parts)}) {rest}".strip()
+        return f"{exercise.name or 'New Exercise'} {rest}".strip()
 
     def _move_exercise_up(self, row):
         idx = self._exercise_rows.index(row)
