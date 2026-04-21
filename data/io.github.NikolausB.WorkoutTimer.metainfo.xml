@@ -64,7 +64,7 @@
   <content_rating type="oars-1.1" />
   <categories>
     <category>Sports</category>
-    <category>Health</category>
+    <category>Utility</category>
   </categories>
   <keywords>
     <keyword>timer</keyword>
@@ -74,12 +74,6 @@
     <keyword>exercise</keyword>
     <keyword>fitness</keyword>
   </keywords>
-  <credits>
-    <credit type="author">
-      <name>free-exercise-db</name>
-      <url>https://github.com/yuhonas/free-exercise-db</url>
-    </credit>
-  </credits>
   <releases>
     <release version="1.0.0" date="2026-04-21">
       <description>
