@@ -57,6 +57,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.add_action(action)
 
         self._rebuild_tabs()
+        self._home.refresh()
 
     def _rebuild_tabs(self):
         show_home = app_settings.show_home_page
