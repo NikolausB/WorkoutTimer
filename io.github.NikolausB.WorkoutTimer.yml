@@ -25,6 +25,7 @@ modules:
     build-commands:
       - mkdir -p /app/lib/GL
       - install -Dm755 src/main.py /app/bin/training
+      - install -Dm644 src/__init__.py /app/lib/training/__init__.py
       - install -Dm644 src/models.py /app/lib/training/models.py
       - install -Dm644 src/data_store.py /app/lib/training/data_store.py
       - install -Dm644 src/sound.py /app/lib/training/sound.py
@@ -45,7 +46,7 @@ modules:
       - install -Dm644 src/resources/sounds/beep.ogg /app/lib/training/resources/sounds/beep.ogg
       - install -Dm644 src/resources/sounds/round_start.ogg /app/lib/training/resources/sounds/round_start.ogg
       - install -Dm644 src/resources/sounds/round_end.ogg /app/lib/training/resources/sounds/round_end.ogg
-      - install -Dm644 src/resources/sounds/exercise_complete.ogg /app/lib/training/resources/exercise_complete.ogg
+      - install -Dm644 src/resources/sounds/exercise_complete.ogg /app/lib/training/resources/sounds/exercise_complete.ogg
       - install -Dm644 src/resources/sounds/training_complete.ogg /app/lib/training/resources/sounds/training_complete.ogg
       - install -Dm644 src/resources/exercises/exercises.json /app/lib/training/resources/exercises/exercises.json
       - install -Dm644 src/resources/plans/default_plans.json /app/lib/training/resources/plans/default_plans.json
@@ -60,5 +61,6 @@ modules:
       - install -Dm644 data/icons/hicolor/scalable/apps/io.github.NikolausB.WorkoutTimer.svg /app/share/icons/hicolor/scalable/apps/io.github.NikolausB.WorkoutTimer.svg
       - install -Dm644 data/icons/hicolor/symbolic/apps/io.github.NikolausB.WorkoutTimer-symbolic.svg /app/share/icons/hicolor/symbolic/apps/io.github.NikolausB.WorkoutTimer-symbolic.svg
     sources:
-      - type: dir
-        path: .
+      - type: git
+        url: https://github.com/NikolausB/training-flatpak
+        tag: v1.0.0
