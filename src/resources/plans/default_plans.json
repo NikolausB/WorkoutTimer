@@ -1,0 +1,342 @@
+[
+  {
+    "name": "Full Body Beginner",
+    "exercises": [
+      {
+        "name": "Bodyweight Squat",
+        "reps": 10,
+        "rest_seconds": 60,
+        "image_path": "bundled:Bodyweight_Squat"
+      },
+      {
+        "name": "Pushups",
+        "reps": 8,
+        "rest_seconds": 60,
+        "image_path": "bundled:Pushups"
+      },
+      {
+        "name": "Incline Push-Up",
+        "reps": 8,
+        "rest_seconds": 60,
+        "image_path": "bundled:Incline_Push-Up"
+      },
+      {
+        "name": "Butt Lift (Bridge)",
+        "reps": 12,
+        "rest_seconds": 45,
+        "image_path": "bundled:Butt_Lift_Bridge"
+      },
+      {
+        "name": "Plank",
+        "duration_seconds": 30,
+        "rest_seconds": 45,
+        "image_path": "bundled:Plank"
+      },
+      {
+        "name": "Air Bike",
+        "reps": 20,
+        "rest_seconds": 45,
+        "image_path": "bundled:Air_Bike"
+      }
+    ]
+  },
+  {
+    "name": "Upper Body Strength",
+    "exercises": [
+      {
+        "name": "Barbell Bench Press - Medium Grip",
+        "reps": 8,
+        "rest_seconds": 120,
+        "image_path": "bundled:Barbell_Bench_Press_-_Medium_Grip"
+      },
+      {
+        "name": "Bent Over Barbell Row",
+        "reps": 8,
+        "rest_seconds": 120,
+        "image_path": "bundled:Bent_Over_Barbell_Row"
+      },
+      {
+        "name": "Barbell Shoulder Press",
+        "reps": 8,
+        "rest_seconds": 120,
+        "image_path": "bundled:Barbell_Shoulder_Press"
+      },
+      {
+        "name": "Barbell Curl",
+        "reps": 10,
+        "rest_seconds": 60,
+        "image_path": "bundled:Barbell_Curl"
+      },
+      {
+        "name": "Bench Dips",
+        "reps": 12,
+        "rest_seconds": 60,
+        "image_path": "bundled:Bench_Dips"
+      },
+      {
+        "name": "Crunches",
+        "reps": 15,
+        "rest_seconds": 45,
+        "image_path": "bundled:Crunches"
+      }
+    ]
+  },
+  {
+    "name": "Lower Body Strength",
+    "exercises": [
+      {
+        "name": "Barbell Squat",
+        "reps": 8,
+        "rest_seconds": 120,
+        "image_path": "bundled:Barbell_Squat"
+      },
+      {
+        "name": "Barbell Deadlift",
+        "reps": 6,
+        "rest_seconds": 120,
+        "image_path": "bundled:Barbell_Deadlift"
+      },
+      {
+        "name": "Barbell Lunge",
+        "reps": 8,
+        "rest_seconds": 90,
+        "image_path": "bundled:Barbell_Lunge"
+      },
+      {
+        "name": "Glute Kickback",
+        "reps": 12,
+        "rest_seconds": 60,
+        "image_path": "bundled:Glute_Kickback"
+      },
+      {
+        "name": "Barbell Seated Calf Raise",
+        "reps": 15,
+        "rest_seconds": 60,
+        "image_path": "bundled:Barbell_Seated_Calf_Raise"
+      },
+      {
+        "name": "Butt Lift (Bridge)",
+        "reps": 12,
+        "rest_seconds": 60,
+        "image_path": "bundled:Butt_Lift_Bridge"
+      }
+    ]
+  },
+  {
+    "name": "HIIT Cardio Blast",
+    "exercises": [
+      {
+        "name": "Burpees",
+        "duration_seconds": 45,
+        "rest_seconds": 15,
+        "image_path": null
+      },
+      {
+        "name": "Freehand Jump Squat",
+        "duration_seconds": 45,
+        "rest_seconds": 15,
+        "image_path": "bundled:Freehand_Jump_Squat"
+      },
+      {
+        "name": "Mountain Climbers",
+        "duration_seconds": 45,
+        "rest_seconds": 15,
+        "image_path": null
+      },
+      {
+        "name": "Pushups",
+        "duration_seconds": 45,
+        "rest_seconds": 15,
+        "image_path": "bundled:Pushups"
+      },
+      {
+        "name": "High Knees",
+        "duration_seconds": 45,
+        "rest_seconds": 15,
+        "image_path": null
+      },
+      {
+        "name": "Plank",
+        "duration_seconds": 45,
+        "rest_seconds": 15,
+        "image_path": "bundled:Plank"
+      },
+      {
+        "name": "Air Bike",
+        "duration_seconds": 45,
+        "rest_seconds": 15,
+        "image_path": "bundled:Air_Bike"
+      },
+      {
+        "name": "Russian Twist",
+        "duration_seconds": 45,
+        "rest_seconds": 15,
+        "image_path": null
+      }
+    ]
+  },
+  {
+    "name": "Core and Abs",
+    "exercises": [
+      {
+        "name": "Crunches",
+        "reps": 15,
+        "rest_seconds": 30,
+        "image_path": "bundled:Crunches"
+      },
+      {
+        "name": "Plank",
+        "duration_seconds": 30,
+        "rest_seconds": 30,
+        "image_path": "bundled:Plank"
+      },
+      {
+        "name": "Air Bike",
+        "reps": 20,
+        "rest_seconds": 30,
+        "image_path": "bundled:Air_Bike"
+      },
+      {
+        "name": "Flat Bench Lying Leg Raise",
+        "reps": 12,
+        "rest_seconds": 30,
+        "image_path": "bundled:Flat_Bench_Lying_Leg_Raise"
+      },
+      {
+        "name": "Russian Twist",
+        "reps": 20,
+        "rest_seconds": 30,
+        "image_path": null
+      },
+      {
+        "name": "Dead Bug",
+        "reps": 10,
+        "rest_seconds": 30,
+        "image_path": "bundled:Dead_Bug"
+      }
+    ]
+  },
+  {
+    "name": "Kettlebell Full Body",
+    "exercises": [
+      {
+        "name": "Goblet Squat",
+        "reps": 10,
+        "rest_seconds": 60,
+        "image_path": "bundled:Goblet_Squat"
+      },
+      {
+        "name": "One-Arm Kettlebell Swings",
+        "reps": 12,
+        "rest_seconds": 60,
+        "image_path": "bundled:One-Arm_Kettlebell_Swings"
+      },
+      {
+        "name": "One-Arm Kettlebell Row",
+        "reps": 10,
+        "rest_seconds": 60,
+        "image_path": "bundled:One-Arm_Kettlebell_Row"
+      },
+      {
+        "name": "Kettlebell Thruster",
+        "reps": 8,
+        "rest_seconds": 90,
+        "image_path": "bundled:Kettlebell_Thruster"
+      },
+      {
+        "name": "Kettlebell Turkish Get-Up (Lunge style)",
+        "reps": 3,
+        "rest_seconds": 90,
+        "image_path": "bundled:Kettlebell_Turkish_Get-Up_Lunge_style"
+      },
+      {
+        "name": "Kettlebell Figure 8",
+        "reps": 10,
+        "rest_seconds": 60,
+        "image_path": "bundled:Kettlebell_Figure_8"
+      }
+    ]
+  },
+  {
+    "name": "Kettlebell Strength and Power",
+    "exercises": [
+      {
+        "name": "Two-Arm Kettlebell Military Press",
+        "reps": 8,
+        "rest_seconds": 90,
+        "image_path": "bundled:Two-Arm_Kettlebell_Military_Press"
+      },
+      {
+        "name": "One-Arm Kettlebell Snatch",
+        "reps": 5,
+        "rest_seconds": 90,
+        "image_path": "bundled:One-Arm_Kettlebell_Snatch"
+      },
+      {
+        "name": "Alternating Kettlebell Row",
+        "reps": 8,
+        "rest_seconds": 60,
+        "image_path": "bundled:Alternating_Kettlebell_Row"
+      },
+      {
+        "name": "Front Squats With Two Kettlebells",
+        "reps": 8,
+        "rest_seconds": 90,
+        "image_path": "bundled:Front_Squats_With_Two_Kettlebells"
+      },
+      {
+        "name": "Kettlebell Sumo High Pull",
+        "reps": 10,
+        "rest_seconds": 60,
+        "image_path": "bundled:Kettlebell_Sumo_High_Pull"
+      },
+      {
+        "name": "Kettlebell Windmill",
+        "reps": 6,
+        "rest_seconds": 60,
+        "image_path": "bundled:Kettlebell_Windmill"
+      }
+    ]
+  },
+  {
+    "name": "Sling Trainer Full Body",
+    "exercises": [
+      {
+        "name": "Suspended Push-Up",
+        "reps": 10,
+        "rest_seconds": 60,
+        "image_path": "bundled:Suspended_Push-Up"
+      },
+      {
+        "name": "Suspended Row",
+        "reps": 10,
+        "rest_seconds": 60,
+        "image_path": "bundled:Suspended_Row"
+      },
+      {
+        "name": "Suspended Split Squat",
+        "reps": 8,
+        "rest_seconds": 60,
+        "image_path": "bundled:Suspended_Split_Squat"
+      },
+      {
+        "name": "Suspended Reverse Crunch",
+        "reps": 12,
+        "rest_seconds": 45,
+        "image_path": "bundled:Suspended_Reverse_Crunch"
+      },
+      {
+        "name": "Suspended Fallout",
+        "reps": 8,
+        "rest_seconds": 60,
+        "image_path": "bundled:Suspended_Fallout"
+      },
+      {
+        "name": "Bodyweight Mid Row",
+        "reps": 10,
+        "rest_seconds": 60,
+        "image_path": "bundled:Bodyweight_Mid_Row"
+      }
+    ]
+  }
+]

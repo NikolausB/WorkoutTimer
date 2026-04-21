@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Workout Timer
+Comment=Round timer and workout planner
+Exec=training
+Icon=io.github.NikolausB.WorkoutTimer
+Type=Application
+StartupNotify=true
+Categories=Education;Sports;
+Keywords=timer;workout;training;round;exercise;fitness;
