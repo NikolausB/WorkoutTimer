@@ -30,7 +30,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._timer_page = self._stack.add_titled(self._round_timer, "timer", "Round Timer")
         self._timer_page.set_icon_name("preferences-system-time-symbolic")
         self._plans_page = self._stack.add_titled(self._training_plan, "plans", "Training Plans")
-        self._plans_page.set_icon_name("applications-healthcare-symbolic")
+        self._plans_page.set_icon_name("view-list-symbolic")
         self._ai_page = self._stack.add_titled(self._ai_coach, "ai", "AI Coach")
         self._ai_page.set_icon_name("computer-symbolic")
         self._history_page = self._stack.add_titled(self._history, "history", "History")
