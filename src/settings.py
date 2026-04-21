@@ -15,13 +15,14 @@ _SOUND_EVENTS = (
     "training_complete_sound",
 )
 
-DEFAULT_SOUND_SETTINGS = {
+DEFAULT_SETTINGS = {
     "sound_enabled": True,
     "round_start_sound": "round_start",
     "round_end_sound": "round_end",
     "countdown_tick_sound": "beep",
     "exercise_complete_sound": "exercise_complete",
     "training_complete_sound": "training_complete",
+    "show_exercise_images": True,
 }
 
 
@@ -33,6 +34,7 @@ class AppSettings:
     countdown_tick_sound: str = "beep"
     exercise_complete_sound: str = "exercise_complete"
     training_complete_sound: str = "training_complete"
+    show_exercise_images: bool = True
 
     def get_sound(self, event_key: str) -> str | None:
         if not self.sound_enabled:
@@ -47,7 +49,7 @@ class AppSettings:
 
     @classmethod
     def from_dict(cls, d: dict) -> "AppSettings":
-        defaults = DEFAULT_SOUND_SETTINGS.copy()
+        defaults = DEFAULT_SETTINGS.copy()
         defaults.update({k: v for k, v in d.items() if k in defaults})
         return cls(**defaults)
 

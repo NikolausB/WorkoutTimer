@@ -1,5 +1,5 @@
 from gi.repository import Adw, Gtk
-from settings import app_settings, save_settings, AppSettings, DEFAULT_SOUND_SETTINGS
+from settings import app_settings, save_settings, AppSettings, DEFAULT_SETTINGS
 from sound import sound_player, AVAILABLE_SOUNDS
 
 
@@ -91,6 +91,18 @@ class PreferencesDialog(Adw.Dialog):
 
         box.append(sound_group)
 
+        display_group = Adw.PreferencesGroup(title="Display")
+        display_group.set_description("Control what is shown during workouts")
+
+        self._images_switch = Adw.SwitchRow(
+            title="Show Exercise Images",
+            subtitle="Display exercise images during workouts and in summaries",
+        )
+        self._images_switch.set_active(self._settings.show_exercise_images)
+        display_group.add(self._images_switch)
+
+        box.append(display_group)
+
         save_btn = Gtk.Button(label="Save", css_classes=["suggested-action"], halign=Gtk.Align.END)
         save_btn.connect("clicked", self._on_save_clicked)
         box.append(save_btn)
@@ -137,5 +149,6 @@ class PreferencesDialog(Adw.Dialog):
         global_settings.sound_enabled = self._settings.sound_enabled
         for event_key in _EVENT_LABELS:
             setattr(global_settings, event_key, getattr(self._settings, event_key))
+        global_settings.show_exercise_images = self._images_switch.get_active()
         save_settings(global_settings)
         self.close()

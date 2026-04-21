@@ -220,9 +220,10 @@ class TrainingPlanPage(Adw.Bin):
         for ex_log in session.exercises:
             row = Adw.ActionRow(title=ex_log.exercise_name)
 
-            thumb = load_thumbnail_widget(ex_log.image_path, 36)
-            if thumb:
-                row.add_prefix(thumb)
+            if app_settings.show_exercise_images:
+                thumb = load_thumbnail_widget(ex_log.image_path, 36)
+                if thumb:
+                    row.add_prefix(thumb)
 
             if ex_log.planned_duration_seconds is not None:
                 detail = f"Time: {self._fmt_dur(ex_log.actual_duration_seconds)} / {self._fmt_dur(ex_log.planned_duration_seconds)}"
@@ -288,7 +289,7 @@ class TrainingPlanPage(Adw.Bin):
 
         browse_box = Adw.ActionRow(title="Exercise Image")
 
-        thumb = load_thumbnail_widget(exercise.image_path, 36)
+        thumb = load_thumbnail_widget(exercise.image_path, 36) if app_settings.show_exercise_images else None
         if thumb:
             browse_box.add_prefix(thumb)
         row._thumb_widget = thumb
@@ -364,6 +365,9 @@ class TrainingPlanPage(Adw.Bin):
         old_thumb = getattr(row, "_thumb_widget", None)
         if old_thumb and old_thumb.get_parent():
             old_thumb.get_parent().remove(old_thumb)
+        if not app_settings.show_exercise_images:
+            row._thumb_widget = None
+            return
         new_thumb = load_thumbnail_widget(image_key, 36)
         if new_thumb:
             row._thumb_widget = new_thumb
@@ -511,9 +515,11 @@ class TrainingPlanPage(Adw.Bin):
 
         while child := self._runner_image.get_first_child():
             self._runner_image.remove(child)
-        pic = load_image_widget(ex.image_path, 200)
-        if pic:
-            self._runner_image.append(pic)
+        if app_settings.show_exercise_images:
+            pic = load_image_widget(ex.image_path, 200)
+            if pic:
+                self._runner_image.append(pic)
+        self._runner_image.set_visible(app_settings.show_exercise_images)
 
         next_idx = self._current_exercise_idx + 1
         if next_idx < len(self._running_plan.exercises):
