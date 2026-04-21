@@ -26,10 +26,15 @@ class MainWindow(Adw.ApplicationWindow):
         self._stack = Adw.ViewStack()
 
         self._home_page = self._stack.add_titled(self._home, "home", "Home")
+        self._home_page.set_icon_name("go-home-symbolic")
         self._timer_page = self._stack.add_titled(self._round_timer, "timer", "Round Timer")
+        self._timer_page.set_icon_name("preferences-system-time-symbolic")
         self._plans_page = self._stack.add_titled(self._training_plan, "plans", "Training Plans")
+        self._plans_page.set_icon_name("applications-healthcare-symbolic")
         self._ai_page = self._stack.add_titled(self._ai_coach, "ai", "AI Coach")
+        self._ai_page.set_icon_name("computer-symbolic")
         self._history_page = self._stack.add_titled(self._history, "history", "History")
+        self._history_page.set_icon_name("document-open-recent-symbolic")
 
         self._home._on_switch_to_plans = lambda: self._stack.set_visible_child_name("plans")
 
