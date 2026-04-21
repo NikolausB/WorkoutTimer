@@ -54,7 +54,7 @@ Build and install locally:
 
 ```bash
 # Install runtimes
-flatpak install flathub org.gnome.Platform//49 org.gnome.Sdk//49
+flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
 flatpak install flathub org.flatpak.Builder
 
 # Build and install

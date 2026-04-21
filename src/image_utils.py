@@ -5,7 +5,7 @@ from gi.repository import GLib, Gdk, Gtk
 
 
 _BUNDLED_EXERCISES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "exercises")
-_FLATPAK_EXERCISES_DIR = "/app/lib/training/resources/exercises"
+_FLATPAK_EXERCISES_DIR = "/app/share/training/resources/exercises"
 _USER_IMAGES_DIR = os.path.join(GLib.get_user_data_dir(), "training-flatpak", "images")
 
 _bundled_index: list[dict] | None = None
@@ -107,7 +107,7 @@ def load_all_exercises() -> list[dict]:
 
 def get_plans_dir() -> str:
     local = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "plans")
-    flatpak = "/app/lib/training/resources/plans"
+    flatpak = "/app/share/training/resources/plans"
     if os.path.exists(flatpak):
         return flatpak
     return local

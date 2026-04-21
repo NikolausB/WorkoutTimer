@@ -3,8 +3,8 @@ import sys
 import os
 import gi
 
-sys.path.insert(0, "/app/lib/training")
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, "/app/share/training")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 gi.require_version("Adw", "1")
 gi.require_version("Gst", "1.0")

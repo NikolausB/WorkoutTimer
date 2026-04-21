@@ -8,7 +8,7 @@ from gi.repository import Gst
 Gst.init(None)
 
 _SOUNDS_DIR_LOCAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "sounds")
-_SOUNDS_DIR_FLATPAK = "/app/lib/training/resources/sounds"
+_SOUNDS_DIR_FLATPAK = "/app/share/training/resources/sounds"
 
 AVAILABLE_SOUNDS = ("beep", "round_start", "round_end", "exercise_complete", "training_complete")
 

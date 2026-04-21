@@ -29,8 +29,8 @@
     <name>NikolausB</name>
   </developer>
   <launchable type="desktop-id">io.github.NikolausB.WorkoutTimer.desktop</launchable>
-  <url type="homepage">https://github.com/NikolausB/training-flatpak</url>
-  <url type="bugtracker">https://github.com/NikolausB/training-flatpak/issues</url>
+  <url type="homepage">https://github.com/NikolausB/WorkoutTimer</url>
+  <url type="bugtracker">https://github.com/NikolausB/WorkoutTimer/issues</url>
   <branding>
     <color type="primary" scheme_preference="light">#4CAF50</color>
     <color type="primary" scheme_preference="dark">#2E7D32</color>
@@ -38,39 +38,39 @@
   <screenshots>
     <screenshot type="default">
       <caption>Home Page</caption>
-      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/Home.png</image>
+      <image>https://raw.githubusercontent.com/NikolausB/WorkoutTimer/main/screenshots/Home.png</image>
     </screenshot>
     <screenshot>
       <caption>Round Timer</caption>
-      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/RoundTimer.png</image>
+      <image>https://raw.githubusercontent.com/NikolausB/WorkoutTimer/main/screenshots/RoundTimer.png</image>
     </screenshot>
     <screenshot>
       <caption>Training Plans</caption>
-      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/TrainingPlans.png</image>
+      <image>https://raw.githubusercontent.com/NikolausB/WorkoutTimer/main/screenshots/TrainingPlans.png</image>
     </screenshot>
     <screenshot>
       <caption>Training Plan Editor</caption>
-      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/TrainingPlans2.png</image>
+      <image>https://raw.githubusercontent.com/NikolausB/WorkoutTimer/main/screenshots/TrainingPlans2.png</image>
     </screenshot>
     <screenshot>
       <caption>Training Plan Runner</caption>
-      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/TrainingPlans3.png</image>
+      <image>https://raw.githubusercontent.com/NikolausB/WorkoutTimer/main/screenshots/TrainingPlans3.png</image>
     </screenshot>
     <screenshot>
       <caption>AI Coach</caption>
-      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/AI_Coach.png</image>
+      <image>https://raw.githubusercontent.com/NikolausB/WorkoutTimer/main/screenshots/AI_Coach.png</image>
     </screenshot>
     <screenshot>
       <caption>AI Coach — Generated Plan</caption>
-      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/AI_Coach2.png</image>
+      <image>https://raw.githubusercontent.com/NikolausB/WorkoutTimer/main/screenshots/AI_Coach2.png</image>
     </screenshot>
     <screenshot>
       <caption>Training History</caption>
-      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/TrainingHistory.png</image>
+      <image>https://raw.githubusercontent.com/NikolausB/WorkoutTimer/main/screenshots/TrainingHistory.png</image>
     </screenshot>
     <screenshot>
       <caption>Settings</caption>
-      <image>https://raw.githubusercontent.com/NikolausB/training-flatpak/main/screenshots/TrainingSettings.png</image>
+      <image>https://raw.githubusercontent.com/NikolausB/WorkoutTimer/main/screenshots/TrainingSettings.png</image>
     </screenshot>
   </screenshots>
   <provides>
