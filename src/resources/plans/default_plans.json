@@ -338,5 +338,128 @@
         "image_path": "bundled:Bodyweight_Mid_Row"
       }
     ]
+  },
+  {
+    "name": "Saitama's Workout",
+    "exercises": [
+      {
+        "name": "Pushups",
+        "reps": 100,
+        "rest_seconds": 60,
+        "image_path": "bundled:Pushups"
+      },
+      {
+        "name": "Sit-Up",
+        "reps": 100,
+        "rest_seconds": 60,
+        "image_path": "bundled:Sit-Up"
+      },
+      {
+        "name": "Bodyweight Squat",
+        "reps": 100,
+        "rest_seconds": 60,
+        "image_path": "bundled:Bodyweight_Squat"
+      },
+      {
+        "name": "Rope Jumping",
+        "duration_seconds": 1800,
+        "rest_seconds": 0,
+        "image_path": "bundled:Rope_Jumping"
+      }
+    ]
+  },
+  {
+    "name": "Demon Slayer Corps Training",
+    "exercises": [
+      {
+        "name": "Mountain Climbers",
+        "duration_seconds": 45,
+        "rest_seconds": 30,
+        "image_path": "bundled:Mountain_Climbers"
+      },
+      {
+        "name": "Pushups",
+        "reps": 50,
+        "rest_seconds": 45,
+        "image_path": "bundled:Pushups"
+      },
+      {
+        "name": "Bodyweight Squat",
+        "duration_seconds": 60,
+        "rest_seconds": 30,
+        "image_path": "bundled:Bodyweight_Squat"
+      },
+      {
+        "name": "Plank",
+        "duration_seconds": 60,
+        "rest_seconds": 30,
+        "image_path": "bundled:Plank"
+      },
+      {
+        "name": "Bodyweight Walking Lunge",
+        "reps": 40,
+        "rest_seconds": 30,
+        "image_path": "bundled:Bodyweight_Walking_Lunge"
+      },
+      {
+        "name": "Sit-Up",
+        "reps": 50,
+        "rest_seconds": 30,
+        "image_path": "bundled:Sit-Up"
+      },
+      {
+        "name": "Freehand Jump Squat",
+        "reps": 20,
+        "rest_seconds": 30,
+        "image_path": "bundled:Freehand_Jump_Squat"
+      }
+    ]
+  },
+  {
+    "name": "Rocky Balboa's Training",
+    "exercises": [
+      {
+        "name": "Rope Jumping",
+        "duration_seconds": 120,
+        "rest_seconds": 30,
+        "image_path": "bundled:Rope_Jumping"
+      },
+      {
+        "name": "Pushups",
+        "reps": 50,
+        "rest_seconds": 45,
+        "image_path": "bundled:Pushups"
+      },
+      {
+        "name": "Dips - Chest Version",
+        "reps": 30,
+        "rest_seconds": 30,
+        "image_path": "bundled:Dips_-_Chest_Version"
+      },
+      {
+        "name": "Crunches",
+        "reps": 50,
+        "rest_seconds": 30,
+        "image_path": "bundled:Crunches"
+      },
+      {
+        "name": "Calf Raise On A Dumbbell",
+        "reps": 40,
+        "rest_seconds": 30,
+        "image_path": "bundled:Calf_Raise_On_A_Dumbbell"
+      },
+      {
+        "name": "Bodyweight Walking Lunge",
+        "reps": 30,
+        "rest_seconds": 30,
+        "image_path": "bundled:Bodyweight_Walking_Lunge"
+      },
+      {
+        "name": "Dumbbell Step Ups",
+        "reps": 30,
+        "rest_seconds": 30,
+        "image_path": "bundled:Dumbbell_Step_Ups"
+      }
+    ]
   }
 ]

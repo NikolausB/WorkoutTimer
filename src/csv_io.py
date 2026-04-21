@@ -1,0 +1,129 @@
+import csv
+import os
+from datetime import datetime
+from typing import Optional
+
+from models import TrainingSession, ExerciseLog
+
+
+CSV_HEADER = [
+    "session_id",
+    "plan_name",
+    "started_at",
+    "finished_at",
+    "total_planned_seconds",
+    "total_actual_seconds",
+    "exercise_name",
+    "planned_duration_seconds",
+    "actual_duration_seconds",
+    "planned_reps",
+    "actual_reps",
+    "rest_seconds",
+    "actual_rest_seconds",
+    "completed",
+]
+
+
+def export_history_csv(sessions: list[TrainingSession], filepath: str) -> None:
+    """Export training sessions to a flat CSV file (one row per exercise)."""
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(CSV_HEADER)
+
+        for session in sessions:
+            for ex in session.exercises:
+                writer.writerow([
+                    session.id,
+                    session.plan_name,
+                    session.started_at.isoformat(),
+                    session.finished_at.isoformat() if session.finished_at else "",
+                    session.total_planned_seconds,
+                    session.compute_total_actual_seconds(),
+                    ex.exercise_name,
+                    _fmt(ex.planned_duration_seconds),
+                    _fmt(ex.actual_duration_seconds),
+                    _fmt(ex.planned_reps),
+                    _fmt(ex.actual_reps),
+                    ex.rest_seconds,
+                    _fmt(ex.actual_rest_seconds),
+                    "True" if ex.completed else "False",
+                ])
+
+
+def import_history_csv(filepath: str) -> list[TrainingSession]:
+    """Import training sessions from a flat CSV file."""
+    if not os.path.exists(filepath):
+        return []
+
+    sessions_by_id: dict[str, dict] = {}
+
+    with open(filepath, "r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            sid = row.get("session_id", "").strip()
+            if not sid:
+                continue
+
+            if sid not in sessions_by_id:
+                started_str = row.get("started_at", "").strip()
+                finished_str = row.get("finished_at", "").strip()
+                sessions_by_id[sid] = {
+                    "id": sid,
+                    "plan_name": row.get("plan_name", "").strip(),
+                    "total_planned_seconds": _int(row.get("total_planned_seconds", "")),
+                    "total_actual_seconds": _int(row.get("total_actual_seconds", "")),
+                    "started_at": datetime.fromisoformat(started_str) if started_str else datetime.now(),
+                    "finished_at": datetime.fromisoformat(finished_str) if finished_str else None,
+                    "exercises": [],
+                }
+
+            ex_log = {
+                "exercise_name": row.get("exercise_name", "").strip(),
+                "planned_duration_seconds": _blank_to_none_int(row.get("planned_duration_seconds", "")),
+                "actual_duration_seconds": _blank_to_none_int(row.get("actual_duration_seconds", "")),
+                "planned_reps": _blank_to_none_int(row.get("planned_reps", "")),
+                "actual_reps": _blank_to_none_int(row.get("actual_reps", "")),
+                "rest_seconds": _int(row.get("rest_seconds", "0")),
+                "actual_rest_seconds": _blank_to_none_int(row.get("actual_rest_seconds", "")),
+                "completed": row.get("completed", "").strip().lower() in ("true", "1", "yes", "on"),
+            }
+            sessions_by_id[sid]["exercises"].append(ex_log)
+
+    sessions: list[TrainingSession] = []
+    for sid, data in sessions_by_id.items():
+        session = TrainingSession(
+            id=data["id"],
+            plan_name=data["plan_name"],
+            total_planned_seconds=data.get("total_planned_seconds", 0),
+            total_actual_seconds=data.get("total_actual_seconds", 0),
+            started_at=data["started_at"],
+            finished_at=data.get("finished_at"),
+            exercises=[ExerciseLog.from_dict(e) for e in data["exercises"]],
+        )
+        sessions.append(session)
+
+    sessions.sort(key=lambda s: s.started_at, reverse=True)
+    return sessions
+
+
+# --- helpers ---
+
+def _fmt(val: int | None) -> str:
+    return "" if val is None else str(val)
+
+
+def _blank_to_none_int(val: str) -> Optional[int]:
+    v = val.strip()
+    if v == "":
+        return None
+    try:
+        return int(v)
+    except ValueError:
+        return None
+
+
+def _int(val: str) -> int:
+    try:
+        return int(val.strip() or 0)
+    except ValueError:
+        return 0

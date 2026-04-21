@@ -1,4 +1,5 @@
-from gi.repository import Adw, Gtk
+import os
+from gi.repository import Adw, Gtk, GLib
 from models import TrainingSession, ExerciseLog
 from data_store import DataStore
 
@@ -26,8 +27,25 @@ class HistoryPage(Adw.Bin):
         box.set_margin_start(24)
         box.set_margin_end(24)
 
+        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        header_box.set_valign(Gtk.Align.CENTER)
+
         header = Gtk.Label(label="Training History", css_classes=["title-1"])
-        box.append(header)
+        header.set_hexpand(True)
+        header.set_halign(Gtk.Align.START)
+        header_box.append(header)
+
+        export_btn = Gtk.Button(label="Export", icon_name="document-save-symbolic", css_classes=["flat"])
+        export_btn.set_tooltip_text("Export history to CSV")
+        export_btn.connect("clicked", self._on_export_clicked)
+        header_box.append(export_btn)
+
+        import_btn = Gtk.Button(label="Import", icon_name="document-open-symbolic", css_classes=["flat"])
+        import_btn.set_tooltip_text("Import history from CSV")
+        import_btn.connect("clicked", self._on_import_clicked)
+        header_box.append(import_btn)
+
+        box.append(header_box)
 
         self._list_stack = Gtk.Stack()
         self._list_stack.set_vexpand(True)
@@ -176,3 +194,76 @@ class HistoryPage(Adw.Bin):
             return "--:--"
         s = max(0, int(seconds))
         return f"{s // 60:02d}:{s % 60:02d}"
+
+    def _on_export_clicked(self, btn):
+        from csv_io import export_history_csv
+
+        chooser = Gtk.FileChooserNative(
+            title="Export Training History",
+            transient_for=self.get_native(),
+            action=Gtk.FileChooserAction.SAVE,
+        )
+        filter_csv = Gtk.FileFilter()
+        filter_csv.add_pattern("*.csv")
+        filter_csv.set_name("CSV files")
+        chooser.add_filter(filter_csv)
+        chooser.set_current_name("training-history.csv")
+
+        def on_response(chooser, response_id):
+            if response_id == Gtk.ResponseType.ACCEPT:
+                path = chooser.get_file().get_path()
+                try:
+                    self._sessions = self._store.load_sessions()
+                    export_history_csv(self._sessions, path)
+                except Exception as e:
+                    dialog = Adw.AlertDialog()
+                    dialog.set_heading("Export failed")
+                    dialog.set_body(str(e))
+                    dialog.add_response("ok", "OK")
+                    dialog.present(self.get_native())
+            chooser.destroy()
+
+        chooser.connect("response", on_response)
+        chooser.show()
+
+    def _on_import_clicked(self, btn):
+        from csv_io import import_history_csv
+
+        chooser = Gtk.FileChooserNative(
+            title="Import Training History",
+            transient_for=self.get_native(),
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        filter_csv = Gtk.FileFilter()
+        filter_csv.add_pattern("*.csv")
+        filter_csv.set_name("CSV files")
+        chooser.add_filter(filter_csv)
+
+        def on_response(chooser, response_id):
+            if response_id == Gtk.ResponseType.ACCEPT:
+                path = chooser.get_file().get_path()
+                try:
+                    if not os.path.exists(path):
+                        chooser.destroy()
+                        return
+                    imported = import_history_csv(path)
+                    if not imported:
+                        chooser.destroy()
+                        return
+                    existing_ids = {s.id for s in self._store.load_sessions()}
+                    new_sessions = [s for s in imported if s.id not in existing_ids]
+                    if new_sessions:
+                        sessions = self._store.load_sessions()
+                        sessions.extend(new_sessions)
+                        self._store.save_sessions(sessions)
+                        self.refresh()
+                except Exception as e:
+                    dialog = Adw.AlertDialog()
+                    dialog.set_heading("Import failed")
+                    dialog.set_body(str(e))
+                    dialog.add_response("ok", "OK")
+                    dialog.present(self.get_native())
+            chooser.destroy()
+
+        chooser.connect("response", on_response)
+        chooser.show()

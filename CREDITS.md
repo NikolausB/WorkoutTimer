@@ -32,4 +32,6 @@ All sounds are synthesized in-app and are original works. No third-party sound f
 
 ## Default Training Plans
 
-The 8 pre-built training plans (Full Body Beginner, Upper Body Strength, Lower Body Strength, HIIT Cardio Blast, Core and Abs, Kettlebell Full Body, Kettlebell Strength and Power, Sling Trainer Full Body) are original creations for this application.
+The 11 pre-built training plans include:
+- 8 original plans: Full Body Beginner, Upper Body Strength, Lower Body Strength, HIIT Cardio Blast, Core and Abs, Kettlebell Full Body, Kettlebell Strength and Power, Sling Trainer Full Body
+- 3 pop culture-inspired plans: Saitama's Workout (One Punch Man), Demon Slayer Corps Training (Demon Slayer), Rocky Balboa's Training (Rocky). These are fan tributes and are not affiliated with or endorsed by the original creators.

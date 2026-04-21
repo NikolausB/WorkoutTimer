@@ -37,6 +37,7 @@ modules:
       - install -Dm644 src/user_exercises.py /app/lib/training/user_exercises.py
       - install -Dm644 src/settings.py /app/lib/training/settings.py
       - install -Dm644 src/preferences.py /app/lib/training/preferences.py
+      - install -Dm644 src/csv_io.py /app/lib/training/csv_io.py
       - install -Dm644 src/resources/sounds/beep.ogg /app/lib/training/resources/sounds/beep.ogg
       - install -Dm644 src/resources/sounds/round_start.ogg /app/lib/training/resources/sounds/round_start.ogg
       - install -Dm644 src/resources/sounds/round_end.ogg /app/lib/training/resources/sounds/round_end.ogg
