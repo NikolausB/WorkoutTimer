@@ -565,6 +565,9 @@ class TrainingPlanPage(Adw.Bin):
 
         self._start_training(plan)
 
+    def start_plan(self, plan: TrainingPlan):
+        self._start_training(plan)
+
     def _start_training(self, plan: TrainingPlan):
         self._running_plan = plan
         self._current_exercise_idx = 0

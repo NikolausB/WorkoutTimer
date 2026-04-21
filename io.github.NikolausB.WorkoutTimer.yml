@@ -32,6 +32,7 @@ modules:
       - install -Dm644 src/training_plan.py /app/lib/training/training_plan.py
       - install -Dm644 src/history.py /app/lib/training/history.py
       - install -Dm644 src/window.py /app/lib/training/window.py
+      - install -Dm644 src/home.py /app/lib/training/home.py
       - install -Dm644 src/image_utils.py /app/lib/training/image_utils.py
       - install -Dm644 src/exercise_picker.py /app/lib/training/exercise_picker.py
       - install -Dm644 src/user_exercises.py /app/lib/training/user_exercises.py

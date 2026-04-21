@@ -23,6 +23,9 @@ DEFAULT_SETTINGS = {
     "exercise_complete_sound": "exercise_complete",
     "training_complete_sound": "training_complete",
     "show_exercise_images": True,
+    "show_home_page": True,
+    "show_timer_page": True,
+    "show_workout_page": True,
 }
 
 
@@ -35,6 +38,9 @@ class AppSettings:
     exercise_complete_sound: str = "exercise_complete"
     training_complete_sound: str = "training_complete"
     show_exercise_images: bool = True
+    show_home_page: bool = True
+    show_timer_page: bool = True
+    show_workout_page: bool = True
 
     def get_sound(self, event_key: str) -> str | None:
         if not self.sound_enabled:

@@ -103,6 +103,32 @@ class PreferencesDialog(Adw.Dialog):
 
         box.append(display_group)
 
+        tabs_group = Adw.PreferencesGroup(title="Tabs")
+        tabs_group.set_description("Choose which tabs are shown in the main view")
+
+        self._home_switch = Adw.SwitchRow(
+            title="Show Home Page",
+            subtitle="Landing page with recent and recommended workouts",
+        )
+        self._home_switch.set_active(self._settings.show_home_page)
+        tabs_group.add(self._home_switch)
+
+        self._timer_switch = Adw.SwitchRow(
+            title="Show Round Timer",
+            subtitle="Configurable round timer with pause periods",
+        )
+        self._timer_switch.set_active(self._settings.show_timer_page)
+        tabs_group.add(self._timer_switch)
+
+        self._workout_switch = Adw.SwitchRow(
+            title="Show Training Plans",
+            subtitle="Training plan builder and runner",
+        )
+        self._workout_switch.set_active(self._settings.show_workout_page)
+        tabs_group.add(self._workout_switch)
+
+        box.append(tabs_group)
+
         save_btn = Gtk.Button(label="Save", css_classes=["suggested-action"], halign=Gtk.Align.END)
         save_btn.connect("clicked", self._on_save_clicked)
         box.append(save_btn)
@@ -150,5 +176,8 @@ class PreferencesDialog(Adw.Dialog):
         for event_key in _EVENT_LABELS:
             setattr(global_settings, event_key, getattr(self._settings, event_key))
         global_settings.show_exercise_images = self._images_switch.get_active()
+        global_settings.show_home_page = self._home_switch.get_active()
+        global_settings.show_timer_page = self._timer_switch.get_active()
+        global_settings.show_workout_page = self._workout_switch.get_active()
         save_settings(global_settings)
         self.close()
