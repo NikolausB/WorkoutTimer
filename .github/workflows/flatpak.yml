@@ -1,0 +1,21 @@
+name: Build Flatpak
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-builder:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Flatpak
+        run: |
+          flatpak-builder --repo=repo --force-clean build-dir/ io.github.NikolausB.WorkoutTimer.yml
+      - name: Lint Manifest
+        run: |
+          flatpak-builder-lint manifest io.github.NikolausB.WorkoutTimer.yml
