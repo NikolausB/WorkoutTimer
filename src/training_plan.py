@@ -3,6 +3,7 @@ from models import TrainingPlan, Exercise, TrainingSession, ExerciseLog
 from data_store import DataStore
 from timer_core import TimerCore
 from sound import sound_player
+from ui_scaling import apply_scaling
 from settings import app_settings
 from image_utils import load_image_widget, load_thumbnail_widget, copy_user_image, resolve_image_path
 from exercise_picker import ExercisePicker
@@ -130,30 +131,30 @@ class TrainingPlanPage(Adw.Bin):
         self._stack.add_named(scrolled, "editor")
 
     def _build_runner_view(self):
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        box.set_margin_top(24)
-        box.set_margin_bottom(24)
-        box.set_margin_start(24)
-        box.set_margin_end(24)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, vexpand=True)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        box.set_margin_start(16)
+        box.set_margin_end(16)
 
-        self._runner_plan_label = Gtk.Label(label="", css_classes=["title-2"])
+        self._runner_plan_label = Gtk.Label(label="")
         box.append(self._runner_plan_label)
 
         self._runner_image = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, halign=Gtk.Align.CENTER)
         box.append(self._runner_image)
 
-        self._runner_exercise_label = Gtk.Label(label="", css_classes=["title-1"])
+        self._runner_exercise_label = Gtk.Label(label="")
         self._runner_exercise_label.set_vexpand(True)
         self._runner_exercise_label.set_valign(Gtk.Align.CENTER)
         box.append(self._runner_exercise_label)
 
-        self._runner_phase_label = Gtk.Label(label="", css_classes=["heading"])
+        self._runner_phase_label = Gtk.Label(label="")
         box.append(self._runner_phase_label)
 
-        self._runner_countdown = Gtk.Label(label="00:00", css_classes=["timer-display"])
+        self._runner_countdown = Gtk.Label(label="00:00")
         box.append(self._runner_countdown)
 
-        self._runner_next_label = Gtk.Label(label="", css_classes=["dim-label"])
+        self._runner_next_label = Gtk.Label(label="")
         box.append(self._runner_next_label)
 
         self._reps_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, visible=False)
@@ -448,6 +449,19 @@ class TrainingPlanPage(Adw.Bin):
         if parts:
             return f"{exercise.name or 'New Exercise'} ({', '.join(parts)}) {rest}".strip()
         return f"{exercise.name or 'New Exercise'} {rest}".strip()
+
+    def update_fonts(self, width, height):
+        apply_scaling(
+            [
+                ("timer", self._runner_countdown),
+                ("exercise", self._runner_exercise_label),
+                ("info", self._runner_plan_label),
+                ("info", self._runner_phase_label),
+                ("info", self._runner_next_label),
+            ],
+            width,
+            height,
+        )
 
     def _move_exercise_up(self, row):
         idx = self._exercise_rows.index(row)

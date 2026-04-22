@@ -7,11 +7,10 @@
     </linearGradient>
   </defs>
   <rect width="128" height="128" rx="28" fill="url(#bg)"/>
-  <circle cx="64" cy="70" r="32" fill="none" stroke="white" stroke-width="6"/>
-  <line x1="64" y1="70" x2="64" y2="48" stroke="white" stroke-width="4" stroke-linecap="round"/>
-  <line x1="64" y1="70" x2="80" y2="70" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <circle cx="64" cy="70" r="3" fill="white"/>
-  <line x1="64" y1="38" x2="64" y2="30" stroke="white" stroke-width="5" stroke-linecap="round"/>
-  <rect x="50" y="26" width="28" height="6" rx="3" fill="white"/>
-  <circle cx="64" cy="22" r="2" fill="white"/>
+  <line x1="18" y1="92" x2="110" y2="92" stroke="white" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+  <line x1="38" y1="88" x2="78" y2="62" stroke="white" stroke-width="8" stroke-linecap="round"/>
+  <line x1="78" y1="62" x2="98" y2="88" stroke="white" stroke-width="8" stroke-linecap="round"/>
+  <line x1="48" y1="72" x2="38" y2="88" stroke="white" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="60" cy="52" r="10" fill="white"/>
+  <line x1="56" y1="60" x2="48" y2="72" stroke="white" stroke-width="5" stroke-linecap="round"/>
 </svg>

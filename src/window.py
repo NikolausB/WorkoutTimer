@@ -6,6 +6,7 @@ from home import HomePage
 from ai_coach import AICoachPage
 from data_store import DataStore
 from settings import app_settings
+from ui_scaling import apply_scaling
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -47,13 +48,13 @@ class MainWindow(Adw.ApplicationWindow):
         self._fullscreen_btn = Gtk.Button(icon_name="view-fullscreen-symbolic", css_classes=["flat"])
         self._fullscreen_btn.connect("clicked", self._on_toggle_fullscreen)
 
-        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        header_box.append(switcher)
-        header_box.append(self._prefs_btn)
-        header_box.append(self._fullscreen_btn)
+        header = Adw.HeaderBar()
+        header.set_title_widget(switcher)
+        header.pack_end(self._fullscreen_btn)
+        header.pack_end(self._prefs_btn)
 
         toolbar = Adw.ToolbarView()
-        toolbar.add_top_bar(header_box)
+        toolbar.add_top_bar(header)
         toolbar.set_content(self._stack)
 
         self.set_content(toolbar)
@@ -66,6 +67,20 @@ class MainWindow(Adw.ApplicationWindow):
 
         self._rebuild_tabs()
         self._home.refresh()
+
+        self.connect("notify::default-width", self._on_window_resize)
+        self.connect("notify::default-height", self._on_window_resize)
+
+    def _on_window_resize(self, *args):
+        w = self.get_width()
+        h = self.get_height()
+        if w <= 0 or h <= 0:
+            return
+        child = self._stack.get_visible_child()
+        if child == self._round_timer:
+            self._round_timer.update_fonts(w, h)
+        elif child == self._training_plan:
+            self._training_plan.update_fonts(w, h)
 
     def _rebuild_tabs(self):
         show_home = app_settings.show_home_page

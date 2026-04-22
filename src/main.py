@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 gi.require_version("Adw", "1")
 gi.require_version("Gst", "1.0")
 
-from gi.repository import Adw, Gtk, Gio, Gdk
+from gi.repository import Adw, Gtk, Gio
 from window import MainWindow
 
 
@@ -22,18 +22,6 @@ class TrainingApp(Adw.Application):
 
     def do_activate(self):
         self.set_accels_for_action("win.toggle-fullscreen", ["F11"])
-        css_provider = Gtk.CssProvider()
-        css_provider.load_from_data(b"""
-            .timer-display {
-                font-size: 72px;
-                font-weight: 800;
-            }
-        """)
-        Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(),
-            css_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-        )
         win = self.props.active_window
         if not win:
             win = MainWindow(application=self)

@@ -10,3 +10,7 @@ pkgdatadir = join_paths(datadir, 'training')
 
 subdir('src')
 subdir('data')
+
+install_data('LICENSE',
+  install_dir: join_paths(get_option('prefix'), 'share', 'licenses', 'io.github.NikolausB.WorkoutTimer')
+)

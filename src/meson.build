@@ -17,6 +17,7 @@ python_modules = [
   'sound.py',
   'timer_core.py',
   'training_plan.py',
+  'ui_scaling.py',
   'user_exercises.py',
   'window.py',
 ]

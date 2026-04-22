@@ -3,6 +3,7 @@ from timer_core import TimerCore
 from sound import sound_player
 from settings import app_settings
 from models import RoundConfig
+from ui_scaling import apply_scaling
 
 
 class RoundTimerPage(Adw.Bin):
@@ -44,7 +45,7 @@ class RoundTimerPage(Adw.Bin):
         self._phase_label.add_css_class("heading")
         main_box.append(self._phase_label)
 
-        self._countdown_label = Gtk.Label(label="00:00", css_classes=["timer-display"])
+        self._countdown_label = Gtk.Label(label="00:00")
         self._countdown_label.set_vexpand(True)
         self._countdown_label.set_valign(Gtk.Align.CENTER)
         main_box.append(self._countdown_label)
@@ -70,6 +71,17 @@ class RoundTimerPage(Adw.Bin):
 
         main_box.append(btn_box)
         self.set_child(main_box)
+
+    def update_fonts(self, width, height):
+        apply_scaling(
+            [
+                ("timer", self._countdown_label),
+                ("info", self._round_label),
+                ("info", self._phase_label),
+            ],
+            width,
+            height,
+        )
 
     def _add_spin_row(self, group, title, lower, upper, value, step):
         adj = Gtk.Adjustment(value=value, lower=lower, upper=upper, step_increment=step)
