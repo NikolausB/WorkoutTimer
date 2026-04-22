@@ -9,22 +9,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:gnome-50
     steps:
       - uses: actions/checkout@v4
-      - name: Install flatpak-builder
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak-builder
-      - name: Add Flathub remote
-        run: |
-          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-      - name: Install runtimes
-        run: |
-          flatpak install --user -y flathub org.gnome.Platform//50 org.gnome.Sdk//50
-      - name: Build Flatpak
-        run: |
-          flatpak-builder --repo=repo --force-clean build-dir/ io.github.NikolausB.WorkoutTimer.yml
-      - name: Lint Manifest
-        run: |
-          flatpak install --user -y flathub org.flatpak.Builder
-          flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest io.github.NikolausB.WorkoutTimer.yml
+      - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@master
+        with:
+          manifest-path: io.github.NikolausB.WorkoutTimer.yml
+          run-tests: true
