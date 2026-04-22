@@ -92,7 +92,7 @@
     <keyword>ai</keyword>
   </keywords>
   <releases>
-    <release version="1.0.0" date="2026-04-21">
+    <release version="1.0.2" date="2026-04-22">
       <description>
         <p>Initial release with round timer, training plans, AI coach, multi-round circuits, and history.</p>
       </description>
