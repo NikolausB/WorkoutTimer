@@ -45,12 +45,8 @@ class MainWindow(Adw.ApplicationWindow):
         self._prefs_btn.set_tooltip_text("Preferences")
         self._prefs_btn.connect("clicked", self._on_preferences_clicked)
 
-        self._fullscreen_btn = Gtk.Button(icon_name="view-fullscreen-symbolic", css_classes=["flat"])
-        self._fullscreen_btn.connect("clicked", self._on_toggle_fullscreen)
-
         header = Adw.HeaderBar()
         header.set_title_widget(switcher)
-        header.pack_end(self._fullscreen_btn)
         header.pack_end(self._prefs_btn)
 
         toolbar = Adw.ToolbarView()
@@ -61,15 +57,27 @@ class MainWindow(Adw.ApplicationWindow):
 
         self._stack.connect("notify::visible-child", self._on_tab_switched)
 
-        action = Gio.SimpleAction.new("toggle-fullscreen", None)
-        action.connect("activate", lambda *_: self._on_toggle_fullscreen(None))
-        self.add_action(action)
-
         self._rebuild_tabs()
         self._home.refresh()
 
         self.connect("notify::default-width", self._on_window_resize)
         self.connect("notify::default-height", self._on_window_resize)
+        self.connect("realize", self._on_realize)
+
+    def _on_realize(self, *args):
+        GLib.idle_add(self._initial_font_update)
+
+    def _initial_font_update(self):
+        w = self.get_width()
+        h = self.get_height()
+        if w <= 0 or h <= 0:
+            return GLib.SOURCE_CONTINUE
+        child = self._stack.get_visible_child()
+        if child == self._round_timer:
+            self._round_timer.update_fonts(w, h)
+        elif child == self._training_plan:
+            self._training_plan.update_fonts(w, h)
+        return GLib.SOURCE_REMOVE
 
     def _on_window_resize(self, *args):
         w = self.get_width()
@@ -115,13 +123,14 @@ class MainWindow(Adw.ApplicationWindow):
         elif child == self._home:
             self._home.refresh()
 
-    def _on_toggle_fullscreen(self, btn):
-        if self.is_fullscreen():
-            self.unfullscreen()
-            self._fullscreen_btn.set_icon_name("view-fullscreen-symbolic")
-        else:
-            self.fullscreen()
-            self._fullscreen_btn.set_icon_name("view-restore-symbolic")
+        w = self.get_width()
+        h = self.get_height()
+        if w <= 0 or h <= 0:
+            return
+        if child == self._round_timer:
+            self._round_timer.update_fonts(w, h)
+        elif child == self._training_plan:
+            self._training_plan.update_fonts(w, h)
 
     def _on_preferences_clicked(self, btn):
         from preferences import PreferencesDialog

@@ -20,6 +20,8 @@ CSV_HEADER = [
     "actual_duration_seconds",
     "planned_reps",
     "actual_reps",
+    "planned_weight_kg",
+    "actual_weight_kg",
     "rest_seconds",
     "actual_rest_seconds",
     "completed",
@@ -49,6 +51,8 @@ def export_history_csv(sessions: list[TrainingSession], filepath: str) -> None:
                     _fmt(ex.actual_duration_seconds),
                     _fmt(ex.planned_reps),
                     _fmt(ex.actual_reps),
+                    _fmt_f(ex.planned_weight_kg),
+                    _fmt_f(ex.actual_weight_kg),
                     ex.rest_seconds,
                     _fmt(ex.actual_rest_seconds),
                     "True" if ex.completed else "False",
@@ -91,6 +95,8 @@ def import_history_csv(filepath: str) -> list[TrainingSession]:
                 "actual_duration_seconds": _blank_to_none_int(row.get("actual_duration_seconds", "")),
                 "planned_reps": _blank_to_none_int(row.get("planned_reps", "")),
                 "actual_reps": _blank_to_none_int(row.get("actual_reps", "")),
+                "planned_weight_kg": _blank_to_none_float(row.get("planned_weight_kg", "")),
+                "actual_weight_kg": _blank_to_none_float(row.get("actual_weight_kg", "")),
                 "rest_seconds": _int(row.get("rest_seconds", "0")),
                 "actual_rest_seconds": _blank_to_none_int(row.get("actual_rest_seconds", "")),
                 "completed": row.get("completed", "").strip().lower() in ("true", "1", "yes", "on"),
@@ -123,12 +129,26 @@ def _fmt(val: int | None) -> str:
     return "" if val is None else str(val)
 
 
+def _fmt_f(val: float | None) -> str:
+    return "" if val is None else f"{val:g}"
+
+
 def _blank_to_none_int(val: str) -> Optional[int]:
     v = val.strip()
     if v == "":
         return None
     try:
         return int(v)
+    except ValueError:
+        return None
+
+
+def _blank_to_none_float(val: str) -> Optional[float]:
+    v = val.strip()
+    if v == "":
+        return None
+    try:
+        return float(v)
     except ValueError:
         return None
 

@@ -46,24 +46,28 @@
       {
         "name": "Barbell Bench Press - Medium Grip",
         "reps": 8,
+        "weight_kg": 40.0,
         "rest_seconds": 120,
         "image_path": "bundled:Barbell_Bench_Press_-_Medium_Grip"
       },
       {
         "name": "Bent Over Barbell Row",
         "reps": 8,
+        "weight_kg": 40.0,
         "rest_seconds": 120,
         "image_path": "bundled:Bent_Over_Barbell_Row"
       },
       {
         "name": "Barbell Shoulder Press",
         "reps": 8,
+        "weight_kg": 30.0,
         "rest_seconds": 120,
         "image_path": "bundled:Barbell_Shoulder_Press"
       },
       {
         "name": "Barbell Curl",
         "reps": 10,
+        "weight_kg": 20.0,
         "rest_seconds": 60,
         "image_path": "bundled:Barbell_Curl"
       },
@@ -87,18 +91,21 @@
       {
         "name": "Barbell Squat",
         "reps": 8,
+        "weight_kg": 60.0,
         "rest_seconds": 120,
         "image_path": "bundled:Barbell_Squat"
       },
       {
         "name": "Barbell Deadlift",
         "reps": 6,
+        "weight_kg": 60.0,
         "rest_seconds": 120,
         "image_path": "bundled:Barbell_Deadlift"
       },
       {
         "name": "Barbell Lunge",
         "reps": 8,
+        "weight_kg": 30.0,
         "rest_seconds": 90,
         "image_path": "bundled:Barbell_Lunge"
       },
@@ -111,6 +118,7 @@
       {
         "name": "Barbell Seated Calf Raise",
         "reps": 15,
+        "weight_kg": 20.0,
         "rest_seconds": 60,
         "image_path": "bundled:Barbell_Seated_Calf_Raise"
       },
@@ -224,36 +232,42 @@
       {
         "name": "Goblet Squat",
         "reps": 10,
+        "weight_kg": 12.0,
         "rest_seconds": 60,
         "image_path": "bundled:Goblet_Squat"
       },
       {
         "name": "One-Arm Kettlebell Swings",
         "reps": 12,
+        "weight_kg": 16.0,
         "rest_seconds": 60,
         "image_path": "bundled:One-Arm_Kettlebell_Swings"
       },
       {
         "name": "One-Arm Kettlebell Row",
         "reps": 10,
+        "weight_kg": 16.0,
         "rest_seconds": 60,
         "image_path": "bundled:One-Arm_Kettlebell_Row"
       },
       {
         "name": "Kettlebell Thruster",
         "reps": 8,
+        "weight_kg": 12.0,
         "rest_seconds": 90,
         "image_path": "bundled:Kettlebell_Thruster"
       },
       {
         "name": "Kettlebell Turkish Get-Up (Lunge style)",
         "reps": 3,
+        "weight_kg": 12.0,
         "rest_seconds": 90,
         "image_path": "bundled:Kettlebell_Turkish_Get-Up_Lunge_style"
       },
       {
         "name": "Kettlebell Figure 8",
         "reps": 10,
+        "weight_kg": 12.0,
         "rest_seconds": 60,
         "image_path": "bundled:Kettlebell_Figure_8"
       }
@@ -265,36 +279,42 @@
       {
         "name": "Two-Arm Kettlebell Military Press",
         "reps": 8,
+        "weight_kg": 16.0,
         "rest_seconds": 90,
         "image_path": "bundled:Two-Arm_Kettlebell_Military_Press"
       },
       {
         "name": "One-Arm Kettlebell Snatch",
         "reps": 5,
+        "weight_kg": 16.0,
         "rest_seconds": 90,
         "image_path": "bundled:One-Arm_Kettlebell_Snatch"
       },
       {
         "name": "Alternating Kettlebell Row",
         "reps": 8,
+        "weight_kg": 16.0,
         "rest_seconds": 60,
         "image_path": "bundled:Alternating_Kettlebell_Row"
       },
       {
         "name": "Front Squats With Two Kettlebells",
         "reps": 8,
+        "weight_kg": 16.0,
         "rest_seconds": 90,
         "image_path": "bundled:Front_Squats_With_Two_Kettlebells"
       },
       {
         "name": "Kettlebell Sumo High Pull",
         "reps": 10,
+        "weight_kg": 16.0,
         "rest_seconds": 60,
         "image_path": "bundled:Kettlebell_Sumo_High_Pull"
       },
       {
         "name": "Kettlebell Windmill",
         "reps": 6,
+        "weight_kg": 12.0,
         "rest_seconds": 60,
         "image_path": "bundled:Kettlebell_Windmill"
       }

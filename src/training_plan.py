@@ -1,4 +1,4 @@
-from gi.repository import Adw, Gtk, GObject, Gdk
+from gi.repository import Adw, Gtk, GObject, Gdk, GLib
 from models import TrainingPlan, Exercise, TrainingSession, ExerciseLog
 from data_store import DataStore
 from timer_core import TimerCore
@@ -154,6 +154,16 @@ class TrainingPlanPage(Adw.Bin):
         self._runner_countdown = Gtk.Label(label="00:00")
         box.append(self._runner_countdown)
 
+        runner_widget = self
+        def _on_runner_realize(*args):
+            root = runner_widget.get_root()
+            if root is not None:
+                w = root.get_width()
+                h = root.get_height()
+                if w > 0 and h > 0:
+                    runner_widget.update_fonts(w, h)
+        self.connect("realize", _on_runner_realize)
+
         self._runner_next_label = Gtk.Label(label="")
         box.append(self._runner_next_label)
 
@@ -253,6 +263,13 @@ class TrainingPlanPage(Adw.Bin):
             else:
                 detail = ""
 
+            if ex_log.planned_weight_kg is not None and ex_log.planned_weight_kg > 0:
+                weight_str = f"Weight: {ex_log.planned_weight_kg:g}kg"
+                if detail:
+                    detail = f"{detail} | {weight_str}"
+                else:
+                    detail = weight_str
+
             rest_info = f"Rest: {self._fmt_dur(ex_log.actual_rest_seconds)} / {self._fmt_dur(ex_log.rest_seconds)}"
             if detail:
                 row.set_subtitle(f"{detail} | {rest_info}")
@@ -336,6 +353,11 @@ class TrainingPlanPage(Adw.Bin):
         reps_spin = Adw.SpinRow(title="Reps", adjustment=reps_adj)
         row.add_row(reps_spin)
 
+        weight_adj = Gtk.Adjustment(value=exercise.weight_kg or 0, lower=0, upper=999, step_increment=0.5)
+        weight_spin = Adw.SpinRow(title="Weight (kg)", adjustment=weight_adj)
+        weight_spin.set_digits(1)
+        row.add_row(weight_spin)
+
         rest_adj = Gtk.Adjustment(value=exercise.rest_seconds, lower=0, upper=600, step_increment=5)
         rest_spin = Adw.SpinRow(title="Rest after (seconds)", adjustment=rest_adj)
         row.add_row(rest_spin)
@@ -358,9 +380,10 @@ class TrainingPlanPage(Adw.Bin):
 
         row.add_row(row._reorder_box)
 
-        name_entry.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, rest_spin, exercise))
-        dur_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, rest_spin, exercise))
-        reps_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, rest_spin, exercise))
+        name_entry.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, weight_spin, rest_spin, exercise))
+        dur_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, weight_spin, rest_spin, exercise))
+        reps_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, weight_spin, rest_spin, exercise))
+        weight_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, weight_spin, rest_spin, exercise))
 
         self._exercise_rows.append(row)
         self._exercises_group.add(row)
@@ -423,12 +446,14 @@ class TrainingPlanPage(Adw.Bin):
             child = child.get_next_sibling()
         return children
 
-    def _sync_exercise_from_row(self, row, name_entry, dur_spin, reps_spin, rest_spin, exercise):
+    def _sync_exercise_from_row(self, row, name_entry, dur_spin, reps_spin, weight_spin, rest_spin, exercise):
         exercise.name = name_entry.get_text()
         dur_val = int(dur_spin.get_value())
         exercise.duration_seconds = dur_val if dur_val > 0 else None
         reps_val = int(reps_spin.get_value())
         exercise.reps = reps_val if reps_val > 0 else None
+        weight_val = weight_spin.get_value()
+        exercise.weight_kg = round(weight_val, 1) if weight_val > 0 else None
         exercise.rest_seconds = int(rest_spin.get_value())
         row.set_title(self._exercise_display_title(exercise))
 
@@ -441,6 +466,8 @@ class TrainingPlanPage(Adw.Bin):
 
     def _exercise_display_title(self, exercise: Exercise) -> str:
         parts = []
+        if exercise.weight_kg is not None and exercise.weight_kg > 0:
+            parts.append(f"{exercise.weight_kg:g}kg")
         if exercise.duration_seconds is not None and exercise.duration_seconds > 0:
             parts.append(f"{exercise.duration_seconds}s")
         if exercise.reps is not None and exercise.reps > 0:
@@ -486,6 +513,7 @@ class TrainingPlanPage(Adw.Bin):
             name_entry = None
             dur_spin = None
             reps_spin = None
+            weight_spin = None
             rest_spin = None
             for child in children:
                 if isinstance(child, Adw.EntryRow) and child.get_title() == "Name":
@@ -494,6 +522,8 @@ class TrainingPlanPage(Adw.Bin):
                     dur_spin = child
                 elif isinstance(child, Adw.SpinRow) and child.get_title() == "Reps":
                     reps_spin = child
+                elif isinstance(child, Adw.SpinRow) and child.get_title() == "Weight (kg)":
+                    weight_spin = child
                 elif isinstance(child, Adw.SpinRow) and child.get_title() == "Rest after (seconds)":
                     rest_spin = child
             if name_entry:
@@ -504,6 +534,9 @@ class TrainingPlanPage(Adw.Bin):
             if reps_spin:
                 reps_val = int(reps_spin.get_value())
                 exercise.reps = reps_val if reps_val > 0 else None
+            if weight_spin:
+                weight_val = weight_spin.get_value()
+                exercise.weight_kg = round(weight_val, 1) if weight_val > 0 else None
             if rest_spin:
                 exercise.rest_seconds = int(rest_spin.get_value())
 
@@ -629,6 +662,12 @@ class TrainingPlanPage(Adw.Bin):
         self._update_runner_plan_label()
         self._stack.set_visible_child_name("runner")
         self._start_current_exercise()
+        root = self.get_root()
+        if root is not None:
+            w = root.get_width()
+            h = root.get_height()
+            if w > 0 and h > 0:
+                self.update_fonts(w, h)
 
     def _update_runner_plan_label(self):
         if self._total_rounds > 1:
@@ -643,7 +682,10 @@ class TrainingPlanPage(Adw.Bin):
 
         ex = self._running_plan.exercises[self._current_exercise_idx]
         self._phase = "exercise"
-        self._runner_exercise_label.set_label(ex.name)
+        exercise_label = ex.name
+        if ex.weight_kg is not None and ex.weight_kg > 0:
+            exercise_label += f"  ({ex.weight_kg:g}kg)"
+        self._runner_exercise_label.set_label(exercise_label)
 
         while child := self._runner_image.get_first_child():
             self._runner_image.remove(child)
@@ -755,6 +797,8 @@ class TrainingPlanPage(Adw.Bin):
                 actual_duration_seconds=elapsed,
                 planned_reps=ex.reps,
                 actual_reps=int(self._reps_spin.get_value()) if not ex.is_timed() else None,
+                planned_weight_kg=ex.weight_kg,
+                actual_weight_kg=ex.weight_kg,
                 rest_seconds=ex.rest_seconds,
                 completed=True,
                 image_path=ex.image_path,
@@ -777,6 +821,8 @@ class TrainingPlanPage(Adw.Bin):
             actual_duration_seconds=elapsed,
             planned_reps=ex.reps,
             actual_reps=int(self._reps_spin.get_value()),
+            planned_weight_kg=ex.weight_kg,
+            actual_weight_kg=ex.weight_kg,
             rest_seconds=ex.rest_seconds,
             completed=True,
             image_path=ex.image_path,
@@ -812,6 +858,8 @@ class TrainingPlanPage(Adw.Bin):
                 actual_duration_seconds=elapsed,
                 planned_reps=ex.reps,
                 actual_reps=int(self._reps_spin.get_value()) if not ex.is_timed() else None,
+                planned_weight_kg=ex.weight_kg,
+                actual_weight_kg=ex.weight_kg,
                 rest_seconds=ex.rest_seconds,
                 completed=False,
                 image_path=ex.image_path,

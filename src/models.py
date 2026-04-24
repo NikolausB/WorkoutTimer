@@ -17,6 +17,7 @@ class Exercise:
     duration_seconds: Optional[int] = None
     reps: Optional[int] = None
     rest_seconds: int = 30
+    weight_kg: Optional[float] = None
     image_path: Optional[str] = None
 
     def is_timed(self) -> bool:
@@ -29,17 +30,22 @@ class Exercise:
             "reps": self.reps,
             "rest_seconds": self.rest_seconds,
         }
+        if self.weight_kg is not None:
+            d["weight_kg"] = self.weight_kg
         if self.image_path is not None:
             d["image_path"] = self.image_path
         return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "Exercise":
+        weight = d.get("weight_kg")
+        weight = float(weight) if weight is not None else None
         return cls(
             name=d.get("name", ""),
             duration_seconds=d.get("duration_seconds"),
             reps=d.get("reps"),
             rest_seconds=d.get("rest_seconds", 30),
+            weight_kg=weight,
             image_path=d.get("image_path"),
         )
 
@@ -93,6 +99,8 @@ class ExerciseLog:
     actual_duration_seconds: Optional[int] = None
     planned_reps: Optional[int] = None
     actual_reps: Optional[int] = None
+    planned_weight_kg: Optional[float] = None
+    actual_weight_kg: Optional[float] = None
     rest_seconds: int = 0
     actual_rest_seconds: Optional[int] = None
     completed: bool = True
@@ -111,18 +119,28 @@ class ExerciseLog:
             "completed": self.completed,
             "round_number": self.round_number,
         }
+        if self.planned_weight_kg is not None:
+            d["planned_weight_kg"] = self.planned_weight_kg
+        if self.actual_weight_kg is not None:
+            d["actual_weight_kg"] = self.actual_weight_kg
         if self.image_path is not None:
             d["image_path"] = self.image_path
         return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExerciseLog":
+        planned_w = d.get("planned_weight_kg")
+        planned_w = float(planned_w) if planned_w is not None else None
+        actual_w = d.get("actual_weight_kg")
+        actual_w = float(actual_w) if actual_w is not None else None
         return cls(
             exercise_name=d.get("exercise_name", ""),
             planned_duration_seconds=d.get("planned_duration_seconds"),
             actual_duration_seconds=d.get("actual_duration_seconds"),
             planned_reps=d.get("planned_reps"),
             actual_reps=d.get("actual_reps"),
+            planned_weight_kg=planned_w,
+            actual_weight_kg=actual_w,
             rest_seconds=d.get("rest_seconds", 0),
             actual_rest_seconds=d.get("actual_rest_seconds"),
             completed=d.get("completed", True),

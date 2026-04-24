@@ -1,8 +1,8 @@
-from gi.repository import Pango
+from gi.repository import Pango, GLib
 
 
 def _compute_font_size(width, height, base_ratio, min_size=16, max_size=120):
-    available = min(width, height)
+    available = max(min(width, height), int(width * 0.35))
     size = int(available * base_ratio)
     return max(min_size, min(max_size, size))
 
@@ -31,3 +31,7 @@ def _apply_font(label, size, weight=400):
         label.set_attributes(attrs)
     except Exception:
         pass
+
+
+def deferred_apply_scaling(func, *args):
+    GLib.timeout_add(50, func, *args)

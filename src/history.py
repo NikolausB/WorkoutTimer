@@ -179,6 +179,13 @@ class HistoryPage(Adw.Bin):
             else:
                 detail = ""
 
+            if ex_log.planned_weight_kg is not None and ex_log.planned_weight_kg > 0:
+                weight_str = f"Weight: {ex_log.planned_weight_kg:g}kg"
+                if detail:
+                    detail = f"{detail} | {weight_str}"
+                else:
+                    detail = weight_str
+
             rest_info = f"Rest: {self._fmt_dur(ex_log.actual_rest_seconds)} / {self._fmt_dur(ex_log.rest_seconds)}"
             if detail:
                 row.set_subtitle(f"{detail} | {rest_info}")

@@ -11,14 +11,15 @@ You MUST respond ONLY with valid JSON in this exact format, no other text, no ma
   "total_rounds": 1,
   "rest_between_rounds_seconds": 60,
   "exercises": [
-    {"name": "Exercise Name", "duration_seconds": 30, "reps": null, "rest_seconds": 30},
-    {"name": "Exercise Name", "duration_seconds": null, "reps": 10, "rest_seconds": 60}
+    {"name": "Exercise Name", "duration_seconds": 30, "reps": null, "weight_kg": null, "rest_seconds": 30},
+    {"name": "Exercise Name", "duration_seconds": null, "reps": 10, "weight_kg": 60.0, "rest_seconds": 60}
   ]
 }
 
 Rules:
 - For timed exercises, set duration_seconds (>= 10) and reps to null
 - For rep-based exercises, set reps (>= 1) and duration_seconds to null
+- weight_kg is optional. Set it to a number (e.g. 60.0, 12.5) when the exercise uses weights (barbell, dumbbell, kettlebell, machine). Use null for bodyweight exercises.
 - rest_seconds is always required (0-300, use 0 if no rest needed)
 - total_rounds is how many times to repeat ALL exercises (1 = single pass, 3 = repeat 3 times). Use 1 unless the user asks for multiple rounds/circuits.
 - rest_between_rounds_seconds is the pause in seconds between rounds when total_rounds > 1 (0-600, default 60). Use 0 if no rest between rounds is desired.

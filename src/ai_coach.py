@@ -207,6 +207,7 @@ class AICoachPage(Adw.Bin):
                 dur = ex_data.get("duration_seconds")
                 reps = ex_data.get("reps")
                 rest = ex_data.get("rest_seconds", 30)
+                weight_kg = ex_data.get("weight_kg")
 
                 if dur is not None:
                     try:
@@ -226,12 +227,20 @@ class AICoachPage(Adw.Bin):
                     rest = max(0, int(rest))
                 except (ValueError, TypeError):
                     rest = 30
+                if weight_kg is not None:
+                    try:
+                        weight_kg = float(weight_kg)
+                        if weight_kg <= 0:
+                            weight_kg = None
+                    except (ValueError, TypeError):
+                        weight_kg = None
 
                 image_key = self._match_exercise_image(ex_name, name_to_key)
                 exercises.append(Exercise(
                     name=ex_name,
                     duration_seconds=dur,
                     reps=reps,
+                    weight_kg=weight_kg,
                     rest_seconds=rest,
                     image_path=image_key,
                 ))
@@ -281,6 +290,8 @@ class AICoachPage(Adw.Bin):
 
         for ex in plan.exercises:
             parts = []
+            if ex.weight_kg is not None and ex.weight_kg > 0:
+                parts.append(f"{ex.weight_kg:g}kg")
             if ex.duration_seconds:
                 parts.append(f"{ex.duration_seconds}s")
             if ex.reps:

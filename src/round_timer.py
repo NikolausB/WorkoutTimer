@@ -1,4 +1,4 @@
-from gi.repository import Adw, Gtk, GObject
+from gi.repository import Adw, Gtk, GObject, GLib
 from timer_core import TimerCore
 from sound import sound_player
 from settings import app_settings
@@ -71,6 +71,22 @@ class RoundTimerPage(Adw.Bin):
 
         main_box.append(btn_box)
         self.set_child(main_box)
+
+        self.connect("realize", self._on_realize)
+
+    def _on_realize(self, *args):
+        GLib.idle_add(self._initial_font_update)
+
+    def _initial_font_update(self):
+        root = self.get_root()
+        if root is None:
+            return GLib.SOURCE_CONTINUE
+        w = root.get_width()
+        h = root.get_height()
+        if w <= 0 or h <= 0:
+            return GLib.SOURCE_CONTINUE
+        self.update_fonts(w, h)
+        return GLib.SOURCE_REMOVE
 
     def update_fonts(self, width, height):
         apply_scaling(

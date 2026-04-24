@@ -21,7 +21,6 @@ class TrainingApp(Adw.Application):
         )
 
     def do_activate(self):
-        self.set_accels_for_action("win.toggle-fullscreen", ["F11"])
         win = self.props.active_window
         if not win:
             win = MainWindow(application=self)
