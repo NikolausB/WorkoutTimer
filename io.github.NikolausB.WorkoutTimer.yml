@@ -16,4 +16,4 @@ modules:
     sources:
       - type: git
         url: https://github.com/NikolausB/WorkoutTimer
-        tag: v1.0.2
+        tag: v1.0.3
