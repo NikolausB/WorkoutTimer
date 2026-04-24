@@ -715,7 +715,7 @@ class TrainingPlanPage(Adw.Bin):
             self._runner_phase_label.set_label("Reps")
             self._reps_spin.set_value(ex.reps or 0)
             self._exercise_start_time = datetime.now().timestamp()
-            self._runner_countdown.set_label("--:--")
+            self._runner_countdown.set_label(f"{ex.reps or 0}")
 
     def _start_rest(self):
         ex = self._running_plan.exercises[self._current_exercise_idx]
