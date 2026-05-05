@@ -11,6 +11,7 @@ gi.require_version("Gst", "1.0")
 
 from gi.repository import Adw, Gtk, Gio
 from window import MainWindow
+from settings import app_settings
 
 
 class TrainingApp(Adw.Application):
@@ -21,6 +22,8 @@ class TrainingApp(Adw.Application):
         )
 
     def do_activate(self):
+        if app_settings.force_dark:
+            Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK)
         win = self.props.active_window
         if not win:
             win = MainWindow(application=self)

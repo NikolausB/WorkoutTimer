@@ -92,6 +92,17 @@
     <keyword>ai</keyword>
   </keywords>
   <releases>
+    <release version="1.1.1" date="2026-05-05">
+      <description>
+        <p>Steam Deck bugfixes: fullscreen, dark mode, workout resize.</p>
+        <ul>
+          <li>Guide button now toggles true fullscreen (not maximize)</li>
+          <li>Added "Force Dark Mode" toggle in Preferences for Steam Deck</li>
+          <li>Fixed window resize when Done button appears/disappears during rep-based exercises</li>
+          <li>Updated README with correct controller controls</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-05-05">
       <description>
         <p>Full gamepad and controller support for Steam Deck and desktop.</p>

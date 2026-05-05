@@ -176,10 +176,10 @@ class MainWindow(Adw.ApplicationWindow):
             self._switch_tab(1)
             return
         if action == "guide":
-            if self.is_maximized():
-                self.unmaximize()
+            if self.is_fullscreen():
+                self.unfullscreen()
             else:
-                self.maximize()
+                self.fullscreen()
             return
 
         if self._open_dialog is not None:

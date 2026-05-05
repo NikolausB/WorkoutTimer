@@ -13,7 +13,7 @@ A sport training application for Linux, built with GTK 4 and libadwaita.
 - **Multi-Round Circuits** — Repeat all exercises for multiple rounds with configurable rest between rounds
 - **Training History** — Per-session detail with per-exercise logging (actual vs planned), CSV export/import
 - **Customizable Sounds** — Choose different sounds for round start, round end, exercise complete, round break, and training complete
-- **Fullscreen Mode** — F11 or header bar button for distraction-free workouts
+- **Fullscreen Mode** — Guide button (controller) or F11 key for distraction-free workouts
 - **Gamepad & Controller Support** — Full controller navigation for Steam Deck and desktop gamepads (Xbox, PlayStation, generic). D-pad focus cycling with visible outline, A/B/X/Y/Start/Select/Guide button mapping, trigger scrolling, and in-workout confirmation dialogs — all controller-navigable
 - **Add Custom Exercises** — Add your own exercises with custom images
 - **Tab Visibility** — Show or hide tabs (Home, Timer, Training Plans, AI Coach) in Preferences
@@ -30,7 +30,7 @@ A sport training application for Linux, built with GTK 4 and libadwaita.
 | Y | Skip rest (workout runner), toggle shift (virtual keyboard) |
 | Start | Pause / resume workout, start training from editor, close keyboard |
 | Select | Open preferences (most pages), show virtual keyboard (AI Coach) |
-| Guide (Xbox/PS) | Toggle maximize / unmaximize window |
+| Guide (Xbox/PS) | Toggle fullscreen on/off |
 | L1 / R1 | Switch to previous / next tab |
 | L2 / R2 | Scroll detail views (history, summaries) |
 

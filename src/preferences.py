@@ -163,6 +163,13 @@ class PreferencesDialog(Adw.Dialog):
         self._deck_combo.set_selected(idx)
         gamepad_group.add(self._deck_combo)
 
+        self._dark_switch = Adw.SwitchRow(
+            title="Force Dark Mode",
+            subtitle="Always use dark color scheme (recommended for Steam Deck)",
+        )
+        self._dark_switch.set_active(self._settings.force_dark)
+        gamepad_group.add(self._dark_switch)
+
         box.append(gamepad_group)
 
         save_btn = Gtk.Button(label="Save", css_classes=["suggested-action"], halign=Gtk.Align.END)
@@ -220,6 +227,7 @@ class PreferencesDialog(Adw.Dialog):
         global_settings.gamepad_hints = self._hints_switch.get_active()
         deck_idx = self._deck_combo.get_selected()
         global_settings.deck_mode = ["auto", "on", "off"][deck_idx]
+        global_settings.force_dark = self._dark_switch.get_active()
         save_settings(global_settings)
         self.close()
 
@@ -234,6 +242,7 @@ class PreferencesDialog(Adw.Dialog):
         widgets.append(self._gamepad_switch)
         widgets.append(self._hints_switch)
         widgets.append(self._deck_combo)
+        widgets.append(self._dark_switch)
         return widgets
 
     def _prefs_focus_cycle(self, delta):

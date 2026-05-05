@@ -167,7 +167,7 @@ class TrainingPlanPage(Adw.Bin):
         self._runner_next_label = Gtk.Label(label="")
         box.append(self._runner_next_label)
 
-        self._reps_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, visible=False)
+        self._reps_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self._reps_spin = Adw.SpinRow(title="Reps completed")
         rep_adj = Gtk.Adjustment(value=0, lower=0, upper=9999, step_increment=1)
         self._reps_spin.set_adjustment(rep_adj)
@@ -175,7 +175,11 @@ class TrainingPlanPage(Adw.Bin):
         done_reps_btn = Gtk.Button(label="Done", css_classes=["suggested-action"])
         done_reps_btn.connect("clicked", self._on_reps_done)
         self._reps_box.append(done_reps_btn)
-        box.append(self._reps_box)
+        self._reps_revealer = Gtk.Revealer()
+        self._reps_revealer.set_child(self._reps_box)
+        self._reps_revealer.set_transition_type(Gtk.RevealerTransitionType.NONE)
+        self._reps_revealer.set_reveal_child(False)
+        box.append(self._reps_revealer)
 
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, halign=Gtk.Align.CENTER)
         self._runner_pause_btn = Gtk.Button(label="Pause")
@@ -712,13 +716,13 @@ class TrainingPlanPage(Adw.Bin):
             self._runner_next_label.set_label("Last exercise!")
 
         if ex.is_timed():
-            self._reps_box.set_visible(False)
+            self._reps_revealer.set_reveal_child(False)
             self._runner_phase_label.set_label("GO!")
             self._exercise_start_time = datetime.now().timestamp()
             sound_player.play_sound(app_settings.get_sound("round_start_sound"))
             self._timer.start(ex.duration_seconds)
         else:
-            self._reps_box.set_visible(True)
+            self._reps_revealer.set_reveal_child(True)
             self._runner_phase_label.set_label("Reps")
             self._reps_spin.set_value(ex.reps or 0)
             self._exercise_start_time = datetime.now().timestamp()
@@ -758,7 +762,7 @@ class TrainingPlanPage(Adw.Bin):
         self._update_runner_plan_label()
         self._runner_exercise_label.set_label("Round Break")
         self._runner_phase_label.set_label(f"Next: Round {self._current_round}")
-        self._reps_box.set_visible(False)
+        self._reps_revealer.set_reveal_child(False)
 
         while child := self._runner_image.get_first_child():
             self._runner_image.remove(child)
@@ -837,7 +841,7 @@ class TrainingPlanPage(Adw.Bin):
         )
         self._running_session.exercises.append(ex_log)
         sound_player.play_sound(app_settings.get_sound("exercise_complete_sound"))
-        self._reps_box.set_visible(False)
+        self._reps_revealer.set_reveal_child(False)
         self._start_rest()
 
     def _on_runner_pause(self, btn):
@@ -998,7 +1002,7 @@ class TrainingPlanPage(Adw.Bin):
 
     def _runner_focusable_widgets(self):
         widgets = []
-        if self._reps_box.get_visible():
+        if self._reps_revealer.get_reveal_child():
             widgets.append(self._reps_spin)
         widgets.append(self._runner_pause_btn)
         widgets.append(self._runner_skip_btn)
@@ -1123,7 +1127,7 @@ class TrainingPlanPage(Adw.Bin):
     def _adjust_focused(self, delta):
         visible = self._stack.get_visible_child_name()
         if visible == "runner":
-            if self._reps_box.get_visible() and self._runner_focus_idx == 0:
+            if self._reps_revealer.get_reveal_child() and self._runner_focus_idx == 0:
                 self._reps_spin.set_value(self._reps_spin.get_value() + delta)
             return
         if visible != "editor":
