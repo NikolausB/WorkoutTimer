@@ -14,8 +14,27 @@ A sport training application for Linux, built with GTK 4 and libadwaita.
 - **Training History** — Per-session detail with per-exercise logging (actual vs planned), CSV export/import
 - **Customizable Sounds** — Choose different sounds for round start, round end, exercise complete, round break, and training complete
 - **Fullscreen Mode** — F11 or header bar button for distraction-free workouts
+- **Gamepad & Controller Support** — Full controller navigation for Steam Deck and desktop gamepads (Xbox, PlayStation, generic). D-pad focus cycling with visible outline, A/B/X/Y/Start/Select/Guide button mapping, trigger scrolling, and in-workout confirmation dialogs — all controller-navigable
 - **Add Custom Exercises** — Add your own exercises with custom images
 - **Tab Visibility** — Show or hide tabs (Home, Timer, Training Plans, AI Coach) in Preferences
+
+## Controller / Gamepad Controls
+
+| Button | Action |
+|--------|--------|
+| D-pad ↑↓ | Focus cycle through page widgets |
+| D-pad ←→ | Adjust spin rows (values), cycle combo rows (dropdowns), toggle switches |
+| A | Enter / activate focused widget (open plan, expand exercise, click button) |
+| B | Back / close (with confirmation before stopping workouts) |
+| X | Toggle exercise expander (editor), reset timer (timer page) |
+| Y | Skip rest (workout runner), toggle shift (virtual keyboard) |
+| Start | Pause / resume workout, start training from editor, close keyboard |
+| Select | Open preferences (most pages), show virtual keyboard (AI Coach) |
+| Guide (Xbox/PS) | Toggle maximize / unmaximize window |
+| L1 / R1 | Switch to previous / next tab |
+| L2 / R2 | Scroll detail views (history, summaries) |
+
+Controller hints are shown in the bottom-right corner of the screen when a gamepad is connected (can be toggled in Preferences).
 
 ## Screenshots
 
