@@ -3,6 +3,8 @@ pkgdatadir = join_paths(get_option('datadir'), 'training')
 python_modules = [
   '__init__.py',
   'ai_coach.py',
+  'controller_hints.py',
+  'controller_manager.py',
   'csv_io.py',
   'data_store.py',
   'exercise_picker.py',
@@ -19,6 +21,7 @@ python_modules = [
   'training_plan.py',
   'ui_scaling.py',
   'user_exercises.py',
+  'virtual_keyboard.py',
   'window.py',
 ]
 

@@ -33,6 +33,9 @@ DEFAULT_SETTINGS = {
     "ai_api_key": "",
     "ai_include_history": True,
     "ai_system_prompt": "",
+    "gamepad_enabled": True,
+    "gamepad_hints": True,
+    "deck_mode": "auto",
 }
 
 
@@ -55,6 +58,9 @@ class AppSettings:
     ai_api_key: str = ""
     ai_include_history: bool = True
     ai_system_prompt: str = ""
+    gamepad_enabled: bool = True
+    gamepad_hints: bool = True
+    deck_mode: str = "auto"
 
     def get_sound(self, event_key: str) -> str | None:
         if not self.sound_enabled:

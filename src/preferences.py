@@ -136,6 +136,35 @@ class PreferencesDialog(Adw.Dialog):
 
         box.append(tabs_group)
 
+        gamepad_group = Adw.PreferencesGroup(title="Controller &amp; Deck Mode")
+        gamepad_group.set_description("Settings for gamepad and Steam Deck compatibility")
+
+        self._gamepad_switch = Adw.SwitchRow(
+            title="Enable Gamepad",
+            subtitle="Support for controllers and Steam Deck input",
+        )
+        self._gamepad_switch.set_active(self._settings.gamepad_enabled)
+        gamepad_group.add(self._gamepad_switch)
+
+        self._hints_switch = Adw.SwitchRow(
+            title="Show Button Hints",
+            subtitle="Display controller button hints during workouts",
+        )
+        self._hints_switch.set_active(self._settings.gamepad_hints)
+        gamepad_group.add(self._hints_switch)
+
+        self._deck_combo = Adw.ComboRow(
+            title="Deck Mode",
+            subtitle="Auto-detect or force Steam Deck UI scaling",
+        )
+        deck_items = Gtk.StringList.new(["Auto", "On", "Off"])
+        self._deck_combo.set_model(deck_items)
+        idx = {"auto": 0, "on": 1, "off": 2}.get(self._settings.deck_mode, 0)
+        self._deck_combo.set_selected(idx)
+        gamepad_group.add(self._deck_combo)
+
+        box.append(gamepad_group)
+
         save_btn = Gtk.Button(label="Save", css_classes=["suggested-action"], halign=Gtk.Align.END)
         save_btn.connect("clicked", self._on_save_clicked)
         box.append(save_btn)
@@ -187,5 +216,81 @@ class PreferencesDialog(Adw.Dialog):
         global_settings.show_timer_page = self._timer_switch.get_active()
         global_settings.show_workout_page = self._workout_switch.get_active()
         global_settings.show_ai_page = self._ai_switch.get_active()
+        global_settings.gamepad_enabled = self._gamepad_switch.get_active()
+        global_settings.gamepad_hints = self._hints_switch.get_active()
+        deck_idx = self._deck_combo.get_selected()
+        global_settings.deck_mode = ["auto", "on", "off"][deck_idx]
         save_settings(global_settings)
         self.close()
+
+    def _prefs_focusable_widgets(self):
+        widgets = [self._sound_switch]
+        widgets.extend(self._combo_rows.values())
+        widgets.append(self._images_switch)
+        widgets.append(self._home_switch)
+        widgets.append(self._timer_switch)
+        widgets.append(self._workout_switch)
+        widgets.append(self._ai_switch)
+        widgets.append(self._gamepad_switch)
+        widgets.append(self._hints_switch)
+        widgets.append(self._deck_combo)
+        return widgets
+
+    def _prefs_focus_cycle(self, delta):
+        widgets = self._prefs_focusable_widgets()
+        if not widgets:
+            return
+        idx = getattr(self, '_controller_focus_idx', -1)
+        old = widgets[idx] if 0 <= idx < len(widgets) else None
+        next_idx = (idx + delta) % len(widgets)
+        self._controller_focus_idx = next_idx
+        if old is not None and old is not widgets[next_idx]:
+            old.remove_css_class("controller-focus")
+        widgets[next_idx].add_css_class("controller-focus")
+        widgets[next_idx].grab_focus()
+
+    def controller_dpad_up(self):
+        self._prefs_focus_cycle(-1)
+
+    def controller_dpad_down(self):
+        self._prefs_focus_cycle(1)
+
+    def controller_dpad_left(self):
+        self._prefs_adjust(-1)
+
+    def controller_dpad_right(self):
+        self._prefs_adjust(1)
+
+    def _prefs_adjust(self, delta):
+        widgets = self._prefs_focusable_widgets()
+        idx = getattr(self, '_controller_focus_idx', -1)
+        if not (0 <= idx < len(widgets)):
+            return
+        widget = widgets[idx]
+        if isinstance(widget, Adw.ComboRow):
+            model = widget.get_model()
+            if model:
+                new_idx = widget.get_selected() + delta
+                if 0 <= new_idx < model.get_n_items():
+                    widget.set_selected(new_idx)
+        elif isinstance(widget, Adw.SwitchRow):
+            widget.set_active(not widget.get_active())
+
+    def controller_a(self):
+        widgets = self._prefs_focusable_widgets()
+        idx = getattr(self, '_controller_focus_idx', -1)
+        if not (0 <= idx < len(widgets)):
+            return
+        widget = widgets[idx]
+        if isinstance(widget, Adw.SwitchRow):
+            widget.set_active(not widget.get_active())
+        elif isinstance(widget, Adw.ComboRow):
+            model = widget.get_model()
+            if model:
+                widget.set_selected((widget.get_selected() + 1) % model.get_n_items())
+
+    def controller_b(self):
+        self.close()
+
+    def controller_start(self):
+        self._on_save_clicked(None)

@@ -82,9 +82,9 @@ class HistoryPage(Adw.Bin):
         box.append(self._detail_info)
 
         self._detail_exercises_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        scrolled = Gtk.ScrolledWindow(vexpand=True)
-        scrolled.set_child(self._detail_exercises_box)
-        box.append(scrolled)
+        self._detail_scrolled = Gtk.ScrolledWindow(vexpand=True)
+        self._detail_scrolled.set_child(self._detail_exercises_box)
+        box.append(self._detail_scrolled)
 
         self._delete_btn = Gtk.Button(label="Delete Session", css_classes=["destructive-action"])
         self._delete_btn.connect("clicked", self._on_delete_current_session)
@@ -282,3 +282,76 @@ class HistoryPage(Adw.Bin):
 
         chooser.connect("response", on_response)
         chooser.show()
+    def get_controller_context(self):
+        visible = self._stack.get_visible_child_name()
+        if visible == "detail":
+            return "list"
+        return "list"
+
+    def _focusable_list_rows(self):
+        rows = []
+        if self._stack.get_visible_child_name() != "main":
+            return rows
+        row = self._session_list_box.get_row_at_index(0)
+        while row is not None:
+            rows.append(row)
+            row = row.get_next_sibling() or self._session_list_box.get_row_at_index(row.get_index() + 1)
+        return rows
+
+    def _get_focus(self):
+        native = self.get_native()
+        return native.get_focus() if native else None
+
+    def _focus_cycle(self, delta):
+        visible = self._stack.get_visible_child_name()
+        if visible == "detail":
+            return
+        rows = self._focusable_list_rows()
+        if not rows:
+            return
+        idx = getattr(self, '_controller_focus_idx', -1)
+        old = rows[idx] if 0 <= idx < len(rows) else None
+        next_idx = (idx + delta) % len(rows)
+        self._controller_focus_idx = next_idx
+        if old is not None and old is not rows[next_idx]:
+            old.remove_css_class("controller-focus")
+        rows[next_idx].add_css_class("controller-focus")
+        rows[next_idx].grab_focus()
+
+    def controller_dpad_up(self):
+        visible = self._stack.get_visible_child_name()
+        if visible == "detail":
+            self._scroll_detail(-60)
+        else:
+            self._focus_cycle(-1)
+
+    def controller_dpad_down(self):
+        visible = self._stack.get_visible_child_name()
+        if visible == "detail":
+            self._scroll_detail(60)
+        else:
+            self._focus_cycle(1)
+
+    def controller_scroll_up(self):
+        self._scroll_detail(-120)
+
+    def controller_scroll_down(self):
+        self._scroll_detail(120)
+
+    def _scroll_detail(self, delta):
+        vadj = self._detail_scrolled.get_vadjustment()
+        new_val = vadj.get_value() + delta
+        vadj.set_value(max(0, min(new_val, vadj.get_upper() - vadj.get_page_size())))
+
+    def controller_a(self):
+        visible = self._stack.get_visible_child_name()
+        if visible == "detail":
+            return
+        idx = getattr(self, '_controller_focus_idx', 0)
+        if 0 <= idx < len(self._sessions):
+            self._show_detail(self._sessions[idx])
+
+    def controller_back(self):
+        if self._stack.get_visible_child_name() == "detail":
+            self._show_list()
+            return

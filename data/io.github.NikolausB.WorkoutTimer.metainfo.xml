@@ -92,6 +92,21 @@
     <keyword>ai</keyword>
   </keywords>
   <releases>
+    <release version="1.1.0" date="2026-05-05">
+      <description>
+        <p>Full gamepad and controller support for Steam Deck and desktop.</p>
+        <ul>
+          <li>D-pad navigation with visible focus indicator across all pages</li>
+          <li>A: enter/activate, B: back/close, X: toggle/reset</li>
+          <li>Y: skip rest, Start: pause/resume/start workout</li>
+          <li>Select: preferences/keyboard, Guide: toggle fullscreen</li>
+          <li>L1/R1: switch tabs, L2/R2: scroll detail views</li>
+          <li>Exercise picker, settings dialog, and confirmation dialogs fully controller-navigable</li>
+          <li>Exercise editor: expand rows with A, adjust values with D-pad left/right</li>
+          <li>Fixed font scaling on fullscreen and maximize toggle</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.2" date="2026-04-22">
       <description>
         <p>Initial release with round timer, training plans, AI coach, multi-round circuits, and history.</p>

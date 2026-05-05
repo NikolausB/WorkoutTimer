@@ -6,6 +6,7 @@ from models import TrainingPlan, Exercise
 from settings import app_settings
 from llm_client import chat_completion, build_history_context, parse_plan_response, DEFAULT_SYSTEM_PROMPT, LLMError
 from image_utils import load_all_exercises
+from virtual_keyboard import VirtualKeyboard
 
 
 class AICoachPage(Adw.Bin):
@@ -106,6 +107,10 @@ class AICoachPage(Adw.Bin):
 
         self._result_group = Adw.PreferencesGroup(title="Generated Plan", visible=False)
         box.append(self._result_group)
+
+        self._keyboard = VirtualKeyboard(on_text_typed=self._on_keyboard_typed)
+        self._keyboard.set_visible(False)
+        box.append(self._keyboard)
 
         self._result_name_label = Gtk.Label(label="", css_classes=["title-2"])
         self._result_group.add(self._result_name_label)
@@ -328,3 +333,115 @@ class AICoachPage(Adw.Bin):
         app_settings.ai_include_history = include_history
         app_settings.ai_system_prompt = system_prompt if system_prompt != DEFAULT_SYSTEM_PROMPT else ""
         save_settings(app_settings)
+
+    # ---- Controller API ---------------------------------------------------
+
+    def _on_keyboard_typed(self, text):
+        buf = self._user_prompt.get_buffer()
+        if text == "\b":
+            buf.backspace(buf.get_insert(), True, True)
+        elif text == "\n":
+            buf.insert_at_cursor(text, -1)
+        else:
+            buf.insert_at_cursor(text, -1)
+
+    def controller_select(self):
+        self._keyboard.set_visible(True)
+
+    def get_controller_context(self):
+        if self._keyboard.get_visible():
+            return "keyboard"
+        return "ai_coach"
+
+    def _focusable_widgets(self):
+        if self._keyboard.get_visible():
+            return []
+        widgets = []
+        if self._result_group.get_visible():
+            widgets.append(self._save_btn)
+            return widgets
+        widgets.append(self._generate_btn)
+        widgets.append(self._provider_row)
+        widgets.append(self._model_row)
+        if self._url_row.get_sensitive():
+            widgets.append(self._url_row)
+        if self._key_row.get_visible() and self._key_row.get_sensitive():
+            widgets.append(self._key_row)
+        widgets.append(self._history_switch)
+        return widgets
+
+    def _focus_cycle(self, delta):
+        widgets = self._focusable_widgets()
+        if not widgets:
+            return
+        idx = getattr(self, '_controller_focus_idx', -1)
+        old = widgets[idx] if 0 <= idx < len(widgets) else None
+        next_idx = (idx + delta) % len(widgets)
+        self._controller_focus_idx = next_idx
+        if old is not None and old is not widgets[next_idx]:
+            old.remove_css_class("controller-focus")
+        widgets[next_idx].add_css_class("controller-focus")
+        widgets[next_idx].grab_focus()
+
+    def controller_a(self):
+        if self._keyboard.get_visible():
+            self._keyboard.on_confirm()
+        elif self._result_group.get_visible():
+            self._on_save_plan(None)
+        else:
+            self._on_generate(None)
+
+    def controller_b(self):
+        if self._keyboard.get_visible():
+            self._keyboard.on_backspace()
+
+    def controller_y(self):
+        if self._keyboard.get_visible():
+            self._keyboard.on_toggle_shift()
+
+    def controller_start(self):
+        if self._keyboard.get_visible():
+            self._keyboard.set_visible(False)
+
+    def controller_dpad_up(self):
+        if self._keyboard.get_visible():
+            self._keyboard.on_dpad("dpad_up")
+        else:
+            self._focus_cycle(-1)
+
+    def controller_dpad_down(self):
+        if self._keyboard.get_visible():
+            self._keyboard.on_dpad("dpad_down")
+        else:
+            self._focus_cycle(1)
+
+    def controller_dpad_left(self):
+        if self._keyboard.get_visible():
+            self._keyboard.on_dpad("dpad_left")
+        else:
+            self._adjust_focused(-1)
+
+    def controller_dpad_right(self):
+        if self._keyboard.get_visible():
+            self._keyboard.on_dpad("dpad_right")
+        else:
+            self._adjust_focused(1)
+
+    def _adjust_focused(self, delta):
+        widgets = self._focusable_widgets()
+        idx = getattr(self, '_controller_focus_idx', -1)
+        if not (0 <= idx < len(widgets)):
+            return
+        widget = widgets[idx]
+        if isinstance(widget, Adw.ComboRow):
+            model = widget.get_model()
+            if model:
+                new_idx = widget.get_selected() + delta
+                if 0 <= new_idx < model.get_n_items():
+                    widget.set_selected(new_idx)
+        elif isinstance(widget, Adw.SwitchRow):
+            widget.set_active(not widget.get_active())
+
+    def controller_back(self):
+        if self._keyboard.get_visible():
+            self._keyboard.set_visible(False)

@@ -108,6 +108,43 @@ class ExercisePicker(Adw.Dialog):
     def _on_add_clicked(self, btn):
         self._show_add_exercise_form()
 
+    def _visible_rows(self):
+        rows = []
+        row = self._list_box.get_row_at_index(0)
+        while row is not None:
+            if row.get_visible() and row.get_child_visible():
+                rows.append(row)
+            row = row.get_next_sibling() or self._list_box.get_row_at_index(row.get_index() + 1)
+        return rows
+
+    def _picker_focus_cycle(self, delta):
+        rows = self._visible_rows()
+        if not rows:
+            return
+        idx = getattr(self, '_controller_focus_idx', -1)
+        old = rows[idx] if 0 <= idx < len(rows) else None
+        next_idx = (idx + delta) % len(rows)
+        self._controller_focus_idx = next_idx
+        if old is not None and old is not rows[next_idx]:
+            old.remove_css_class("controller-focus")
+        rows[next_idx].add_css_class("controller-focus")
+        rows[next_idx].grab_focus()
+
+    def controller_dpad_up(self):
+        self._picker_focus_cycle(-1)
+
+    def controller_dpad_down(self):
+        self._picker_focus_cycle(1)
+
+    def controller_a(self):
+        rows = self._visible_rows()
+        idx = getattr(self, '_controller_focus_idx', -1)
+        if 0 <= idx < len(rows):
+            self._on_row_activated(None, rows[idx])
+
+    def controller_b(self):
+        self.close()
+
     def _show_add_exercise_form(self):
         dialog = Adw.Dialog()
         dialog.set_title("Add Exercise")

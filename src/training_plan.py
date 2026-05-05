@@ -106,24 +106,24 @@ class TrainingPlanPage(Adw.Bin):
         box.append(self._exercises_group)
 
         add_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        add_exercise_btn = Gtk.Button(label="Add Exercise", halign=Gtk.Align.START)
-        add_exercise_btn.connect("clicked", self._on_add_exercise)
-        add_box.append(add_exercise_btn)
-        browse_exercise_btn = Gtk.Button(label="Browse Exercises", halign=Gtk.Align.START)
-        browse_exercise_btn.connect("clicked", self._on_browse_add_exercise)
-        add_box.append(browse_exercise_btn)
+        self._editor_add_exercise_btn = Gtk.Button(label="Add Exercise", halign=Gtk.Align.START)
+        self._editor_add_exercise_btn.connect("clicked", self._on_add_exercise)
+        add_box.append(self._editor_add_exercise_btn)
+        self._editor_browse_exercise_btn = Gtk.Button(label="Browse Exercises", halign=Gtk.Align.START)
+        self._editor_browse_exercise_btn.connect("clicked", self._on_browse_add_exercise)
+        add_box.append(self._editor_browse_exercise_btn)
         box.append(add_box)
 
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        save_btn = Gtk.Button(label="Save Plan", css_classes=["suggested-action"])
-        save_btn.connect("clicked", self._on_save_plan)
-        delete_btn = Gtk.Button(label="Delete Plan", css_classes=["destructive-action"])
-        delete_btn.connect("clicked", self._on_delete_plan)
-        run_btn = Gtk.Button(label="Start Training", css_classes=["pill"])
-        run_btn.connect("clicked", self._on_run_plan)
-        btn_box.append(save_btn)
-        btn_box.append(delete_btn)
-        btn_box.append(run_btn)
+        self._editor_save_btn = Gtk.Button(label="Save Plan", css_classes=["suggested-action"])
+        self._editor_save_btn.connect("clicked", self._on_save_plan)
+        self._editor_delete_btn = Gtk.Button(label="Delete Plan", css_classes=["destructive-action"])
+        self._editor_delete_btn.connect("clicked", self._on_delete_plan)
+        self._editor_run_btn = Gtk.Button(label="Start Training", css_classes=["pill"])
+        self._editor_run_btn.connect("clicked", self._on_run_plan)
+        btn_box.append(self._editor_save_btn)
+        btn_box.append(self._editor_delete_btn)
+        btn_box.append(self._editor_run_btn)
         box.append(btn_box)
 
         scrolled = Gtk.ScrolledWindow(vexpand=True)
@@ -183,7 +183,7 @@ class TrainingPlanPage(Adw.Bin):
         self._runner_skip_btn = Gtk.Button(label="Skip", css_classes=["destructive-action"])
         self._runner_skip_btn.connect("clicked", self._on_runner_skip)
         self._runner_stop_btn = Gtk.Button(label="Stop")
-        self._runner_stop_btn.connect("clicked", self._on_runner_stop)
+        self._runner_stop_btn.connect("clicked", lambda _: self._confirm_stop_workout())
         btn_box.append(self._runner_pause_btn)
         btn_box.append(self._runner_skip_btn)
         btn_box.append(self._runner_stop_btn)
@@ -380,6 +380,9 @@ class TrainingPlanPage(Adw.Bin):
 
         row.add_row(row._reorder_box)
 
+        row._child_widgets = [name_entry, browse_box, dur_spin, reps_spin,
+                              weight_spin, rest_spin, remove_btn, row._reorder_box]
+
         name_entry.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, weight_spin, rest_spin, exercise))
         dur_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, weight_spin, rest_spin, exercise))
         reps_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, weight_spin, rest_spin, exercise))
@@ -398,7 +401,9 @@ class TrainingPlanPage(Adw.Bin):
             exercise.image_path = image_key
             row.set_title(name or "New Exercise")
             self._update_row_thumbnail(row, image_key)
-        ExercisePicker(on_selected=on_selected).present(self.get_root())
+        picker = ExercisePicker(on_selected=on_selected)
+        picker.present(self.get_native())
+        self.get_native()._register_controller_dialog(picker)
 
     def _on_pick_custom_image(self, row, exercise):
         chooser = Gtk.FileChooserNative(
@@ -589,7 +594,9 @@ class TrainingPlanPage(Adw.Bin):
             ex = Exercise(name=name, duration_seconds=30, rest_seconds=30, image_path=image_key)
             self._editor_exercises.append(ex)
             self._append_exercise_row(ex)
-        ExercisePicker(on_selected=on_selected).present(self.get_root())
+        picker = ExercisePicker(on_selected=on_selected)
+        picker.present(self.get_native())
+        self.get_native()._register_controller_dialog(picker)
 
     def _on_save_plan(self, btn):
         name = self._plan_name_entry.get_text().strip()
@@ -874,20 +881,268 @@ class TrainingPlanPage(Adw.Bin):
                 ex_log.actual_rest_seconds = elapsed_rest
             self._advance_exercise()
 
-    def _on_runner_stop(self, btn):
-        self._timer.stop()
+    def _confirm_back_to_list(self):
+        dialog = Adw.AlertDialog(
+            heading="Return to Plan List?",
+            body="Any unsaved workout progress will be lost."
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("back", "Back to Plans")
+        dialog.set_response_appearance("back", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        def on_response(dialog, response):
+            if response == "back":
+                self._show_list()
+        dialog.connect("response", on_response)
+        self.get_native()._register_controller_dialog(dialog, "back", "cancel")
+        dialog.present(self.get_native())
 
+    def _confirm_stop_workout(self):
+        dialog = Adw.AlertDialog(
+            heading="End Training?",
+            body="You can view a summary of your completed exercises."
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("end", "End Training")
+        dialog.set_response_appearance("end", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        def on_response(dialog, response):
+            if response == "end":
+                self._finalize_training_stop()
+        dialog.connect("response", on_response)
+        self.get_native()._register_controller_dialog(dialog, "end", "cancel")
+        dialog.present(self.get_native())
+
+    def _finalize_training_stop(self):
+        self._timer.stop()
         if self._running_session and not self._running_session.finished_at:
             self._running_session.finished_at = datetime.now()
             self._running_session.total_actual_seconds = self._running_session.compute_total_actual_seconds()
             self._store.save_session(self._running_session)
-
             sound_player.play_sound(app_settings.get_sound("training_complete_sound"))
-
             self._populate_summary(self._running_session)
             self._stack.set_visible_child_name("summary")
-
             self._running_session = None
             self._running_plan = None
         else:
             self._show_list()
+
+    # ---- Controller API ---------------------------------------------------
+
+    def get_controller_context(self):
+        visible = self._stack.get_visible_child_name()
+        if visible == "runner":
+            return "runner_exercise"
+        return "list" if visible in ("list", "main") else visible if visible in ("editor", "summary") else ""
+
+    def get_controller_sub_key(self):
+        if self._stack.get_visible_child_name() == "runner":
+            return self._phase
+        return ""
+
+    def controller_a(self):
+        visible = self._stack.get_visible_child_name()
+        if visible == "runner" and self._phase == "exercise":
+            ex = self._running_plan.exercises[self._current_exercise_idx]
+            if not ex.is_timed():
+                self._on_reps_done(None)
+        elif visible == "runner" and self._phase in ("rest", "round_break"):
+            self._on_runner_skip(None)
+        elif visible == "summary":
+            self._show_list()
+        elif visible == "main":
+            idx = getattr(self, '_list_focus_idx', 0)
+            if 0 <= idx < len(self._plans):
+                self._show_editor(self._plans[idx])
+        elif visible == "editor":
+            widgets = self._editor_focusable_widgets()
+            idx = getattr(self, '_editor_focus_idx', -1)
+            if 0 <= idx < len(widgets):
+                widget = widgets[idx]
+                if isinstance(widget, Adw.ExpanderRow):
+                    widget.remove_css_class("controller-focus")
+                    widget.set_expanded(not widget.get_expanded())
+                    self._editor_focus_idx = self._editor_find_expander_index(widget)
+                    if self._editor_focus_idx >= 0:
+                        widgets = self._editor_focusable_widgets()
+                        widgets[self._editor_focus_idx].add_css_class("controller-focus")
+                        widgets[self._editor_focus_idx].grab_focus()
+                elif isinstance(widget, Adw.SpinRow):
+                    widget.grab_focus()
+                elif isinstance(widget, Adw.EntryRow):
+                    widget.grab_focus()
+                elif isinstance(widget, Gtk.Button):
+                    widget.emit("clicked")
+
+    def controller_b(self):
+        visible = self._stack.get_visible_child_name()
+        if visible == "runner":
+            self._confirm_stop_workout()
+        elif visible in ("summary", "editor"):
+            self._show_list()
+
+    def controller_start(self):
+        if self._stack.get_visible_child_name() == "runner":
+            self._on_runner_pause(None)
+        elif self._stack.get_visible_child_name() == "editor":
+            self._on_run_plan(None)
+
+    def controller_y(self):
+        if self._stack.get_visible_child_name() == "runner" and self._phase == "rest":
+            self._on_runner_skip(None)
+
+    def controller_back(self):
+        self.controller_b()
+
+    # ---- Editor row navigation -------------------------------------------
+
+    def _runner_focusable_widgets(self):
+        widgets = []
+        if self._reps_box.get_visible():
+            widgets.append(self._reps_spin)
+        widgets.append(self._runner_pause_btn)
+        widgets.append(self._runner_skip_btn)
+        widgets.append(self._runner_stop_btn)
+        return widgets
+
+    def _runner_focus_cycle(self, delta):
+        widgets = self._runner_focusable_widgets()
+        if not widgets:
+            return
+        idx = getattr(self, '_runner_focus_idx', -1)
+        old = widgets[idx] if 0 <= idx < len(widgets) else None
+        next_idx = (idx + delta) % len(widgets)
+        self._runner_focus_idx = next_idx
+        if old is not None and old is not widgets[next_idx]:
+            old.remove_css_class("controller-focus")
+        widgets[next_idx].add_css_class("controller-focus")
+        widgets[next_idx].grab_focus()
+
+    def _editor_focusable_widgets(self):
+        widgets = [self._plan_name_entry, self._total_rounds_spin, self._rest_between_rounds_spin,
+                   self._editor_add_exercise_btn, self._editor_browse_exercise_btn]
+        for row in self._exercise_rows:
+            widgets.append(row)
+            if row.get_expanded():
+                for child in getattr(row, '_child_widgets', []):
+                    widgets.append(child)
+        widgets.extend([self._editor_save_btn, self._editor_delete_btn, self._editor_run_btn])
+        return widgets
+
+    def _editor_focus_cycle(self, delta):
+        widgets = self._editor_focusable_widgets()
+        if not widgets:
+            return
+        idx = getattr(self, '_editor_focus_idx', -1)
+        old = widgets[idx] if 0 <= idx < len(widgets) else None
+        next_idx = (idx + delta) % len(widgets)
+        self._editor_focus_idx = next_idx
+        if old is not None and old is not widgets[next_idx]:
+            old.remove_css_class("controller-focus")
+        widgets[next_idx].add_css_class("controller-focus")
+        widgets[next_idx].grab_focus()
+
+    def _editor_find_expander_index(self, expander):
+        new_widgets = self._editor_focusable_widgets()
+        try:
+            return new_widgets.index(expander)
+        except ValueError:
+            return -1
+
+    def _editor_toggle_row(self):
+        if not self._exercise_rows:
+            return
+        idx = getattr(self, '_editor_focus_idx', -1)
+        widgets = self._editor_focusable_widgets()
+        if not (0 <= idx < len(widgets)):
+            return
+        widget = widgets[idx]
+        widget.remove_css_class("controller-focus")
+        if isinstance(widget, Adw.ExpanderRow):
+            widget.set_expanded(not widget.get_expanded())
+            self._editor_focus_idx = self._editor_find_expander_index(widget)
+            if self._editor_focus_idx >= 0:
+                new_widgets = self._editor_focusable_widgets()
+                new_widgets[self._editor_focus_idx].add_css_class("controller-focus")
+                new_widgets[self._editor_focus_idx].grab_focus()
+            return
+        parent = widget.get_ancestor(Adw.ExpanderRow)
+        if parent is not None:
+            parent.set_expanded(False)
+            self._editor_focus_idx = self._editor_find_expander_index(parent)
+            if self._editor_focus_idx >= 0:
+                new_widgets = self._editor_focusable_widgets()
+                new_widgets[self._editor_focus_idx].add_css_class("controller-focus")
+                new_widgets[self._editor_focus_idx].grab_focus()
+
+    def _list_rows(self):
+        rows = []
+        child = self._plan_list_box.get_row_at_index(0)
+        while child is not None:
+            rows.append(child)
+            child = child.get_next_sibling() or self._plan_list_box.get_row_at_index(child.get_index() + 1)
+        return rows
+
+    def _list_focus_cycle(self, delta):
+        rows = self._list_rows()
+        if not rows:
+            return
+        idx = getattr(self, '_list_focus_idx', -1)
+        old = rows[idx] if 0 <= idx < len(rows) else None
+        next_idx = (idx + delta) % len(rows)
+        self._list_focus_idx = next_idx
+        if old is not None and old is not rows[next_idx]:
+            old.remove_css_class("controller-focus")
+        rows[next_idx].add_css_class("controller-focus")
+        rows[next_idx].grab_focus()
+
+    def controller_dpad_up(self):
+        visible = self._stack.get_visible_child_name()
+        if visible == "editor":
+            self._editor_focus_cycle(-1)
+        elif visible == "main":
+            self._list_focus_cycle(-1)
+        elif visible == "runner":
+            self._runner_focus_cycle(-1)
+
+    def controller_dpad_down(self):
+        visible = self._stack.get_visible_child_name()
+        if visible == "editor":
+            self._editor_focus_cycle(1)
+        elif visible == "main":
+            self._list_focus_cycle(1)
+        elif visible == "runner":
+            self._runner_focus_cycle(1)
+
+    def controller_dpad_left(self):
+        self._adjust_focused(-1)
+
+    def controller_dpad_right(self):
+        self._adjust_focused(1)
+
+    def _adjust_focused(self, delta):
+        visible = self._stack.get_visible_child_name()
+        if visible == "runner":
+            if self._reps_box.get_visible() and self._runner_focus_idx == 0:
+                self._reps_spin.set_value(self._reps_spin.get_value() + delta)
+            return
+        if visible != "editor":
+            return
+        widgets = self._editor_focusable_widgets()
+        idx = getattr(self, '_editor_focus_idx', -1)
+        if not (0 <= idx < len(widgets)):
+            return
+        widget = widgets[idx]
+        if isinstance(widget, Adw.SpinRow):
+            widget.set_value(widget.get_value() + widget.get_adjustment().get_step_increment() * delta)
+        elif isinstance(widget, Adw.ComboRow):
+            model = widget.get_model()
+            if model:
+                new_idx = widget.get_selected() + delta
+                if 0 <= new_idx < model.get_n_items():
+                    widget.set_selected(new_idx)
+
+    def controller_x(self):
+        # Toggle expand on focused editor row
+        if self._stack.get_visible_child_name() == "editor":
+            self._editor_toggle_row()

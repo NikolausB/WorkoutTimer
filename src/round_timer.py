@@ -217,3 +217,61 @@ class RoundTimerPage(Adw.Bin):
         self._rounds_spin.set_sensitive(not running and self._current_round == 0)
         self._round_time_spin.set_sensitive(not running and self._current_round == 0)
         self._pause_time_spin.set_sensitive(not running and self._current_round == 0)
+
+    # ---- Controller API ---------------------------------------------------
+
+    def get_controller_context(self):
+        return "timer"
+
+    def _focus_cycle_widgets(self):
+        return [self._rounds_spin, self._round_time_spin, self._pause_time_spin,
+                self._start_btn, self._pause_btn, self._reset_btn, self._skip_btn]
+
+    def _focus_cycle(self, delta):
+        widgets = self._focus_cycle_widgets()
+        if not widgets:
+            return
+        idx = getattr(self, '_controller_focus_idx', -1)
+        old = widgets[idx] if 0 <= idx < len(widgets) else None
+        next_idx = (idx + delta) % len(widgets)
+        self._controller_focus_idx = next_idx
+        if old is not None and old is not widgets[next_idx]:
+            old.remove_css_class("controller-focus")
+        widgets[next_idx].add_css_class("controller-focus")
+        widgets[next_idx].grab_focus()
+
+    def controller_dpad_up(self):
+        self._focus_cycle(-1)
+
+    def controller_dpad_down(self):
+        self._focus_cycle(1)
+
+    def controller_dpad_left(self):
+        self._adjust_focused(-1)
+
+    def controller_dpad_right(self):
+        self._adjust_focused(1)
+
+    def _adjust_focused(self, delta):
+        widgets = self._focus_cycle_widgets()
+        idx = getattr(self, '_controller_focus_idx', -1)
+        if not (0 <= idx < len(widgets)):
+            return
+        widget = widgets[idx]
+        if isinstance(widget, Adw.SpinRow):
+            widget.set_value(widget.get_value() + widget.get_adjustment().get_step_increment() * delta)
+
+    def controller_start(self):
+        if self._timer.is_running:
+            self._on_pause_clicked(self._pause_btn)
+        else:
+            self._on_start_clicked(self._start_btn)
+
+    def controller_x(self):
+        self._on_reset_clicked(self._reset_btn)
+
+    def controller_back(self):
+        self._on_skip_clicked(self._skip_btn)
+
+    def controller_a(self):
+        self._on_start_clicked(self._start_btn)

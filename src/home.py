@@ -54,7 +54,9 @@ class HomePage(Adw.Bin):
             row = Adw.ActionRow(
                 title="No training yet",
                 subtitle="Start your first workout!",
+                activatable=True,
             )
+            row.connect("activated", lambda _: self._go_to_plans())
             go_btn = Gtk.Button(label="Browse", css_classes=["flat"])
             go_btn.connect("clicked", lambda _: self._go_to_plans())
             row.add_suffix(go_btn)
@@ -76,7 +78,9 @@ class HomePage(Adw.Bin):
         row = Adw.ActionRow(
             title=plan_name,
             subtitle=f"Last: {date_str} | {ex_count} exercises{rounds_str}",
+            activatable=True,
         )
+        row.connect("activated", self._recent_activated)
 
         if plan:
             open_btn = Gtk.Button(label="Open", css_classes=["suggested-action", "flat"])
@@ -85,6 +89,35 @@ class HomePage(Adw.Bin):
 
         self._recent_row = row
         self._recent_card.add(row)
+
+    def _recent_activated(self, row):
+        if self._recent_row and self._recent_row != row:
+            return
+        sessions = self._store.load_sessions()
+        if not sessions:
+            self._go_to_plans()
+            return
+        last = sessions[0]
+        plan = self._store.get_plan(last.plan_id)
+        if not plan:
+            plan = next((p for p in self._store.load_plans() if p.name == last.plan_name), None)
+        if plan:
+            self._open_plan(plan)
+
+    def _recommended_activated(self, row):
+        if self._recommended_row and self._recommended_row != row:
+            return
+        sessions = self._store.load_sessions()
+        plans = self._store.load_plans()
+        if not plans:
+            return
+        if sessions:
+            plan_counts = Counter(s.plan_name for s in sessions)
+            most_common_name, count = plan_counts.most_common(1)[0]
+            recommended = next((p for p in plans if p.name == most_common_name), plans[0])
+        else:
+            recommended = next((p for p in plans if p.name == "Full Body Beginner"), plans[0])
+        self._open_plan(recommended)
 
     def _update_recommended(self):
         if self._recommended_row:
@@ -119,6 +152,8 @@ class HomePage(Adw.Bin):
         open_btn = Gtk.Button(label="Open", css_classes=["suggested-action", "flat"])
         open_btn.connect("clicked", lambda _, p=recommended: self._open_plan(p))
         row.add_suffix(open_btn)
+        row.set_activatable(True)
+        row.connect("activated", lambda _: self._open_plan(recommended))
 
         self._recommended_row = row
         self._recommended_card.add(row)
@@ -129,5 +164,45 @@ class HomePage(Adw.Bin):
             self._on_switch_to_plans()
 
     def _go_to_plans(self):
+        if self._on_switch_to_plans:
+            self._on_switch_to_plans()
+
+    def get_controller_context(self):
+        return "list"
+
+    def _focusable_widgets(self):
+        widgets = []
+        if self._recent_row is not None:
+            widgets.append(self._recent_row)
+        if self._recommended_row is not None:
+            widgets.append(self._recommended_row)
+        return widgets
+
+    def _focus_cycle(self, delta):
+        widgets = self._focusable_widgets()
+        if not widgets:
+            return
+        idx = getattr(self, '_controller_focus_idx', -1)
+        old = widgets[idx] if 0 <= idx < len(widgets) else None
+        next_idx = (idx + delta) % len(widgets)
+        self._controller_focus_idx = next_idx
+        if old is not None and old is not widgets[next_idx]:
+            old.remove_css_class("controller-focus")
+        widgets[next_idx].add_css_class("controller-focus")
+        widgets[next_idx].grab_focus()
+
+    def controller_dpad_up(self):
+        self._focus_cycle(-1)
+
+    def controller_dpad_down(self):
+        self._focus_cycle(1)
+
+    def controller_a(self):
+        idx = getattr(self, '_controller_focus_idx', 0)
+        widgets = self._focusable_widgets()
+        if 0 <= idx < len(widgets):
+            widgets[idx].activate()
+
+    def controller_back(self):
         if self._on_switch_to_plans:
             self._on_switch_to_plans()
