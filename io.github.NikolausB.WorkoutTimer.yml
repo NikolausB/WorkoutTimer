@@ -7,10 +7,8 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --socket=pulseaudio
-  - --socket=system-bus
   - --device=dri
   - --device=all
-  - --talk-name=org.bluez
   - --share=ipc
   - --share=network
 modules:
