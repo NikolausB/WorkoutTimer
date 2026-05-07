@@ -300,6 +300,7 @@ class TrainingPlanPage(Adw.Bin):
     def _show_list(self):
         self.refresh_plans()
         self._stack.set_visible_child_name("main")
+        self._refresh_hints()
 
     def _show_editor(self, plan: TrainingPlan | None = None):
         self._editor_exercises = []
@@ -693,6 +694,8 @@ class TrainingPlanPage(Adw.Bin):
 
         ex = self._running_plan.exercises[self._current_exercise_idx]
         self._phase = "exercise"
+        self._runner_focus_idx = -1
+        self._refresh_hints()
         exercise_label = ex.name
         if ex.weight_kg is not None and ex.weight_kg > 0:
             exercise_label += f"  ({ex.weight_kg:g}kg)"
@@ -732,6 +735,7 @@ class TrainingPlanPage(Adw.Bin):
         ex = self._running_plan.exercises[self._current_exercise_idx]
         if ex.rest_seconds > 0:
             self._phase = "rest"
+            self._refresh_hints()
             self._runner_phase_label.set_label("REST")
             sound_player.play_sound(app_settings.get_sound("round_end_sound"))
             self._timer.start(ex.rest_seconds)
@@ -757,6 +761,8 @@ class TrainingPlanPage(Adw.Bin):
 
     def _start_round_break(self):
         self._phase = "round_break"
+        self._runner_focus_idx = -1
+        self._refresh_hints()
         self._current_round += 1
         self._current_exercise_idx = 0
         self._update_runner_plan_label()
@@ -782,6 +788,7 @@ class TrainingPlanPage(Adw.Bin):
 
         self._populate_summary(self._running_session)
         self._stack.set_visible_child_name("summary")
+        self._refresh_hints()
 
         self._running_session = None
         self._running_plan = None
@@ -932,6 +939,11 @@ class TrainingPlanPage(Adw.Bin):
             self._show_list()
 
     # ---- Controller API ---------------------------------------------------
+
+    def _refresh_hints(self):
+        native = self.get_native()
+        if native:
+            native._update_hints_visibility()
 
     def get_controller_context(self):
         visible = self._stack.get_visible_child_name()

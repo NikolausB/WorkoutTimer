@@ -1,5 +1,5 @@
 project('workout-timer', 'c',
-  version: '1.1.2',
+  version: '1.1.3',
   meson_version: '>= 0.59.0',
 )
 

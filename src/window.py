@@ -325,7 +325,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         if self._is_deck_mode():
             self._apply_deck_css()
-            GLib.idle_add(lambda: (self.maximize(), GLib.SOURCE_REMOVE))
+            self.set_default_size(1280, 800)
 
         GLib.idle_add(self._initial_font_update)
 
