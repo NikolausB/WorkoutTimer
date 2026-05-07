@@ -12,7 +12,7 @@ class HistoryPage(Adw.Bin):
         self._build_ui()
 
     def _build_ui(self):
-        self._stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
+        self._stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.SLIDE_LEFT_RIGHT, vhomogeneous=True)
         self._stack.set_vexpand(True)
 
         self._build_list_view()
@@ -47,7 +47,7 @@ class HistoryPage(Adw.Bin):
 
         box.append(header_box)
 
-        self._list_stack = Gtk.Stack()
+        self._list_stack = Gtk.Stack(vhomogeneous=True)
         self._list_stack.set_vexpand(True)
 
         scrolled = Gtk.ScrolledWindow()

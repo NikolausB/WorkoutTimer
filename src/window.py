@@ -34,6 +34,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._ai_coach = AICoachPage(self._store, on_plan_saved=self._on_ai_plan_saved)
 
         self._stack = Adw.ViewStack()
+        self._stack.set_vhomogeneous(True)
 
         self._home_page = self._stack.add_titled(self._home, "home", "Home")
         self._home_page.set_icon_name("go-home-symbolic")
