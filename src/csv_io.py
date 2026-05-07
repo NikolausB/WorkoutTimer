@@ -1,10 +1,9 @@
 import csv
-import json
 import os
 from datetime import datetime
 from typing import Optional
 
-from models import TrainingPlan, TrainingSession, ExerciseLog
+from models import TrainingSession, ExerciseLog
 
 
 CSV_HEADER = [
@@ -159,18 +158,3 @@ def _int(val: str) -> int:
         return int(val.strip() or 0)
     except ValueError:
         return 0
-
-
-def export_plans_json(plans: list[TrainingPlan], filepath: str) -> None:
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump([p.to_dict() for p in plans], f, indent=2)
-
-
-def import_plans_json(filepath: str) -> list[TrainingPlan]:
-    if not os.path.exists(filepath):
-        return []
-    with open(filepath, "r", encoding="utf-8") as f:
-        raw = json.load(f)
-    if not isinstance(raw, list):
-        return []
-    return [TrainingPlan.from_dict(d) for d in raw]
