@@ -75,8 +75,6 @@ class MainWindow(Adw.ApplicationWindow):
         self._rebuild_tabs()
         self._home.refresh()
 
-        self.connect("notify::default-width", self._on_window_resize)
-        self.connect("notify::default-height", self._on_window_resize)
         self.connect("notify::is-fullscreen", self._on_window_resize)
         self.connect("notify::is-maximized", self._on_window_resize)
         self.connect("realize", self._on_realize)
@@ -326,7 +324,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         if self._is_deck_mode():
             self._apply_deck_css()
-            self.set_default_size(1280, 800)
+            self.fullscreen()
 
         GLib.idle_add(self._initial_font_update)
 
