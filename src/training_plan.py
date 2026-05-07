@@ -406,6 +406,7 @@ class TrainingPlanPage(Adw.Bin):
         dur_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, weight_spin, rest_spin, exercise))
         reps_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, weight_spin, rest_spin, exercise))
         weight_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, weight_spin, rest_spin, exercise))
+        rest_spin.connect("changed", lambda *_: self._sync_exercise_from_row(row, name_entry, dur_spin, reps_spin, weight_spin, rest_spin, exercise))
 
         self._exercise_rows.append(row)
         self._exercises_group.add(row)
@@ -690,6 +691,8 @@ class TrainingPlanPage(Adw.Bin):
         name = self._plan_name_entry.get_text().strip()
         if not name:
             return
+
+        self._sync_all_exercises_from_rows()
 
         if self._editing_plan_id:
             plan = self._store.get_plan(self._editing_plan_id)
