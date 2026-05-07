@@ -324,7 +324,8 @@ class MainWindow(Adw.ApplicationWindow):
 
         if self._is_deck_mode():
             self._apply_deck_css()
-            self.fullscreen()
+            self.set_size_request(1280, 800)
+            GLib.idle_add(self.fullscreen)
 
         GLib.idle_add(self._initial_font_update)
 
