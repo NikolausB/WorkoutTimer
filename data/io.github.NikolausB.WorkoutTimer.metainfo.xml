@@ -92,6 +92,16 @@
     <keyword>ai</keyword>
   </keywords>
   <releases>
+    <release version="1.1.4" date="2026-05-07">
+      <description>
+        <p>UI fixes: image resize during workout, editor layout, plan export/import.</p>
+        <ul>
+          <li>Fixed window resize when exercise images change during workout</li>
+          <li>Moved "Add Exercise" / "Browse Exercises" buttons above exercises list in editor</li>
+          <li>Export/Import training plans (JSON format)</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.3" date="2026-05-05">
       <description>
         <p>Steam Deck: native resolution window, hints refresh on phase changes.</p>
