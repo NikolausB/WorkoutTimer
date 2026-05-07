@@ -5,7 +5,7 @@ from timer_core import TimerCore
 from sound import sound_player
 from ui_scaling import apply_scaling
 from settings import app_settings
-from image_utils import load_image_widget, load_thumbnail_widget, copy_user_image, resolve_image_path
+from image_utils import load_thumbnail_widget, copy_user_image, resolve_image_path
 from exercise_picker import ExercisePicker
 from datetime import datetime
 
@@ -56,6 +56,15 @@ class TrainingPlanPage(Adw.Bin):
         new_btn.connect("clicked", self._on_new_plan)
         box.append(new_btn)
 
+        io_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, halign=Gtk.Align.START)
+        self._export_btn = Gtk.Button(label="Export", halign=Gtk.Align.START)
+        self._export_btn.connect("clicked", lambda _: self._on_export_plans())
+        io_box.append(self._export_btn)
+        self._import_btn = Gtk.Button(label="Import", halign=Gtk.Align.START)
+        self._import_btn.connect("clicked", lambda _: self._on_import_plans())
+        io_box.append(self._import_btn)
+        box.append(io_box)
+
         self._list_stack = Gtk.Stack()
         self._list_stack.set_vexpand(True)
 
@@ -102,9 +111,6 @@ class TrainingPlanPage(Adw.Bin):
         exercises_label.set_margin_top(12)
         box.append(exercises_label)
 
-        self._exercises_group = Adw.PreferencesGroup()
-        box.append(self._exercises_group)
-
         add_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self._editor_add_exercise_btn = Gtk.Button(label="Add Exercise", halign=Gtk.Align.START)
         self._editor_add_exercise_btn.connect("clicked", self._on_add_exercise)
@@ -113,6 +119,9 @@ class TrainingPlanPage(Adw.Bin):
         self._editor_browse_exercise_btn.connect("clicked", self._on_browse_add_exercise)
         add_box.append(self._editor_browse_exercise_btn)
         box.append(add_box)
+
+        self._exercises_group = Adw.PreferencesGroup()
+        box.append(self._exercises_group)
 
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self._editor_save_btn = Gtk.Button(label="Save Plan", css_classes=["suggested-action"])
@@ -140,8 +149,13 @@ class TrainingPlanPage(Adw.Bin):
         self._runner_plan_label = Gtk.Label(label="")
         box.append(self._runner_plan_label)
 
-        self._runner_image = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, halign=Gtk.Align.CENTER)
-        box.append(self._runner_image)
+        self._runner_image_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, halign=Gtk.Align.CENTER)
+        self._runner_picture = Gtk.Picture.new()
+        self._runner_picture.set_size_request(200, 200)
+        self._runner_picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+        self._runner_picture.set_halign(Gtk.Align.CENTER)
+        self._runner_image_box.append(self._runner_picture)
+        box.append(self._runner_image_box)
 
         self._runner_exercise_label = Gtk.Label(label="")
         self._runner_exercise_label.set_vexpand(True)
@@ -589,6 +603,75 @@ class TrainingPlanPage(Adw.Bin):
     def _on_new_plan(self, btn):
         self._show_editor(None)
 
+    def _on_export_plans(self):
+        from csv_io import export_plans_json
+
+        chooser = Gtk.FileChooserNative(
+            title="Export Training Plans",
+            transient_for=self.get_native(),
+            action=Gtk.FileChooserAction.SAVE,
+        )
+        filter_json = Gtk.FileFilter()
+        filter_json.add_pattern("*.json")
+        filter_json.set_name("JSON files")
+        chooser.add_filter(filter_json)
+        chooser.set_current_name("training-plans.json")
+
+        def on_response(chooser, response_id):
+            if response_id == Gtk.ResponseType.ACCEPT:
+                path = chooser.get_file().get_path()
+                try:
+                    export_plans_json(self._store.load_plans(), path)
+                except Exception as e:
+                    dialog = Adw.AlertDialog()
+                    dialog.set_heading("Export failed")
+                    dialog.set_body(str(e))
+                    dialog.add_response("ok", "OK")
+                    dialog.present(self.get_native())
+            chooser.destroy()
+
+        chooser.connect("response", on_response)
+        chooser.show()
+
+    def _on_import_plans(self):
+        from csv_io import import_plans_json
+
+        chooser = Gtk.FileChooserNative(
+            title="Import Training Plans",
+            transient_for=self.get_native(),
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        filter_json = Gtk.FileFilter()
+        filter_json.add_pattern("*.json")
+        filter_json.set_name("JSON files")
+        chooser.add_filter(filter_json)
+
+        def on_response(chooser, response_id):
+            if response_id == Gtk.ResponseType.ACCEPT:
+                path = chooser.get_file().get_path()
+                try:
+                    imported = import_plans_json(path)
+                    if not imported:
+                        chooser.destroy()
+                        return
+                    existing_ids = {p.id for p in self._store.load_plans()}
+                    new_plans = [p for p in imported if p.id not in existing_ids]
+                    if new_plans:
+                        plans = self._store.load_plans()
+                        plans.extend(new_plans)
+                        self._store.save_plans(plans)
+                        self.refresh_plans()
+                except Exception as e:
+                    dialog = Adw.AlertDialog()
+                    dialog.set_heading("Import failed")
+                    dialog.set_body(str(e))
+                    dialog.add_response("ok", "OK")
+                    dialog.present(self.get_native())
+            chooser.destroy()
+
+        chooser.connect("response", on_response)
+        chooser.show()
+
     def _on_add_exercise(self, btn):
         ex = Exercise(name="", duration_seconds=30, rest_seconds=30)
         self._editor_exercises.append(ex)
@@ -701,13 +784,18 @@ class TrainingPlanPage(Adw.Bin):
             exercise_label += f"  ({ex.weight_kg:g}kg)"
         self._runner_exercise_label.set_label(exercise_label)
 
-        while child := self._runner_image.get_first_child():
-            self._runner_image.remove(child)
         if app_settings.show_exercise_images:
-            pic = load_image_widget(ex.image_path, 200)
-            if pic:
-                self._runner_image.append(pic)
-        self._runner_image.set_visible(app_settings.show_exercise_images)
+            resolved = resolve_image_path(ex.image_path)
+            if resolved:
+                try:
+                    texture = Gdk.Texture.new_from_filename(resolved)
+                    self._runner_picture.set_paintable(texture)
+                except Exception:
+                    self._runner_picture.set_paintable(None)
+            else:
+                self._runner_picture.set_paintable(None)
+        else:
+            self._runner_picture.set_paintable(None)
 
         next_idx = self._current_exercise_idx + 1
         if next_idx < len(self._running_plan.exercises):
@@ -770,9 +858,7 @@ class TrainingPlanPage(Adw.Bin):
         self._runner_phase_label.set_label(f"Next: Round {self._current_round}")
         self._reps_revealer.set_reveal_child(False)
 
-        while child := self._runner_image.get_first_child():
-            self._runner_image.remove(child)
-        self._runner_image.set_visible(False)
+        self._runner_picture.set_paintable(None)
 
         self._runner_next_label.set_label(f"Next: {self._running_plan.exercises[0].name}")
         sound_player.play_sound(app_settings.get_sound("round_end_sound"))
