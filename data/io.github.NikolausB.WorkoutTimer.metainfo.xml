@@ -92,6 +92,17 @@
     <keyword>ai</keyword>
   </keywords>
   <releases>
+    <release version="1.1.2" date="2026-05-05">
+      <description>
+        <p>Steam Deck: auto-maximize, instant dark mode, skip exercise.</p>
+        <ul>
+          <li>Auto-maximize window on Steam Deck at startup</li>
+          <li>Guide button now uses deferred fullscreen toggle for Gamescope</li>
+          <li>Force Dark Mode now applies immediately (no restart needed)</li>
+          <li>Y button skips exercises during workout (not just rest)</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.1" date="2026-05-05">
       <description>
         <p>Steam Deck bugfixes: fullscreen, dark mode, workout resize.</p>

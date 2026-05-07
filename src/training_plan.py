@@ -992,7 +992,7 @@ class TrainingPlanPage(Adw.Bin):
             self._on_run_plan(None)
 
     def controller_y(self):
-        if self._stack.get_visible_child_name() == "runner" and self._phase == "rest":
+        if self._stack.get_visible_child_name() == "runner" and self._phase in ("exercise", "rest"):
             self._on_runner_skip(None)
 
     def controller_back(self):

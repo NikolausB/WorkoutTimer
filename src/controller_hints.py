@@ -3,7 +3,7 @@ from gi.repository import Gtk
 
 _CONTEXT_HINTS = {
     "runner_exercise": {
-        "exercise": "[A] Done  [B] Back  [Start] Pause  [Guide] Fullscreen",
+        "exercise": "[A] Done  [Y] Skip  [B] Back  [Start] Pause  [Guide] Fullscreen",
         "rest":     "[A] Done  [Y] Skip Rest  [Start] Pause  [Guide] Fullscreen",
         "timed":    "[Start] Pause/Resume  [B] Back  [Guide] Fullscreen",
     },

@@ -176,10 +176,7 @@ class MainWindow(Adw.ApplicationWindow):
             self._switch_tab(1)
             return
         if action == "guide":
-            if self.is_fullscreen():
-                self.unfullscreen()
-            else:
-                self.fullscreen()
+            GLib.idle_add(lambda: (self.unfullscreen() if self.is_fullscreen() else self.fullscreen(), GLib.SOURCE_REMOVE))
             return
 
         if self._open_dialog is not None:
@@ -328,6 +325,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         if self._is_deck_mode():
             self._apply_deck_css()
+            GLib.idle_add(lambda: (self.maximize(), GLib.SOURCE_REMOVE))
 
         GLib.idle_add(self._initial_font_update)
 

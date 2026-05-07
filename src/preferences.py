@@ -228,6 +228,9 @@ class PreferencesDialog(Adw.Dialog):
         deck_idx = self._deck_combo.get_selected()
         global_settings.deck_mode = ["auto", "on", "off"][deck_idx]
         global_settings.force_dark = self._dark_switch.get_active()
+        Adw.StyleManager.get_default().set_color_scheme(
+            Adw.ColorScheme.FORCE_DARK if global_settings.force_dark else Adw.ColorScheme.DEFAULT
+        )
         save_settings(global_settings)
         self.close()
 
