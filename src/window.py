@@ -83,6 +83,7 @@ class MainWindow(Adw.ApplicationWindow):
         # loop is already running (required by libmanette's udev monitor).
         self._controller = None
         self._open_dialog = None
+        self._deck_baseline = None
 
     # ---------- Controller Handling ----------
 
@@ -314,6 +315,11 @@ class MainWindow(Adw.ApplicationWindow):
 
     # ---------- Existing methods ----------
 
+    def _font_dims(self):
+        if self._deck_baseline is not None:
+            return self._deck_baseline
+        return (self.get_width(), self.get_height())
+
     def _on_realize(self, *args):
         _log.info("Window realized — initialising controller")
         self._apply_controller_css()
@@ -324,14 +330,13 @@ class MainWindow(Adw.ApplicationWindow):
 
         if self._is_deck_mode():
             self._apply_deck_css()
-            self.set_size_request(1280, 800)
+            self._deck_baseline = (1280, 800)
             GLib.idle_add(self.fullscreen)
 
         GLib.idle_add(self._initial_font_update)
 
     def _initial_font_update(self):
-        w = self.get_width()
-        h = self.get_height()
+        w, h = self._font_dims()
         if w <= 0 or h <= 0:
             return GLib.SOURCE_CONTINUE
         child = self._stack.get_visible_child()
@@ -342,8 +347,7 @@ class MainWindow(Adw.ApplicationWindow):
         return GLib.SOURCE_REMOVE
 
     def _on_window_resize(self, *args):
-        w = self.get_width()
-        h = self.get_height()
+        w, h = self._font_dims()
         if w <= 0 or h <= 0:
             return
         child = self._stack.get_visible_child()
@@ -385,8 +389,7 @@ class MainWindow(Adw.ApplicationWindow):
         elif child == self._home:
             self._home.refresh()
 
-        w = self.get_width()
-        h = self.get_height()
+        w, h = self._font_dims()
         if w <= 0 or h <= 0:
             return
         if child == self._round_timer:
