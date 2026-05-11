@@ -445,3 +445,6 @@ class AICoachPage(Adw.Bin):
     def controller_back(self):
         if self._keyboard.get_visible():
             self._keyboard.set_visible(False)
+
+    def update_fonts(self, width, height):
+        pass

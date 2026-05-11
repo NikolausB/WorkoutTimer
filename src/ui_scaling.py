@@ -8,8 +8,8 @@ def _compute_font_size(width, height, base_ratio, min_size=16, max_size=120):
 
 
 def apply_scaling(labels, width, height):
-    timer_size = _compute_font_size(width, height, 0.12, 36, 128)
-    exercise_size = _compute_font_size(width, height, 0.06, 24, 72)
+    timer_size = _compute_font_size(width, height, 0.10, 36, 96)
+    exercise_size = _compute_font_size(width, height, 0.055, 24, 72)
     info_size = _compute_font_size(width, height, 0.035, 18, 40)
 
     for label_type, label in labels:

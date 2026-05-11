@@ -170,6 +170,16 @@ class PreferencesDialog(Adw.Dialog):
         self._dark_switch.set_active(self._settings.force_dark)
         gamepad_group.add(self._dark_switch)
 
+        self._fullscreen_combo = Adw.ComboRow(
+            title="Fullscreen",
+            subtitle="Auto-detect or force fullscreen behavior",
+        )
+        fullscreen_items = Gtk.StringList.new(["Auto", "On", "Off"])
+        self._fullscreen_combo.set_model(fullscreen_items)
+        idx = {"auto": 0, "on": 1, "off": 2}.get(self._settings.fullscreen_mode, 0)
+        self._fullscreen_combo.set_selected(idx)
+        gamepad_group.add(self._fullscreen_combo)
+
         box.append(gamepad_group)
 
         save_btn = Gtk.Button(label="Save", css_classes=["suggested-action"], halign=Gtk.Align.END)
@@ -227,6 +237,8 @@ class PreferencesDialog(Adw.Dialog):
         global_settings.gamepad_hints = self._hints_switch.get_active()
         deck_idx = self._deck_combo.get_selected()
         global_settings.deck_mode = ["auto", "on", "off"][deck_idx]
+        fullscreen_idx = self._fullscreen_combo.get_selected()
+        global_settings.fullscreen_mode = ["auto", "on", "off"][fullscreen_idx]
         global_settings.force_dark = self._dark_switch.get_active()
         Adw.StyleManager.get_default().set_color_scheme(
             Adw.ColorScheme.FORCE_DARK if global_settings.force_dark else Adw.ColorScheme.DEFAULT
@@ -246,6 +258,7 @@ class PreferencesDialog(Adw.Dialog):
         widgets.append(self._hints_switch)
         widgets.append(self._deck_combo)
         widgets.append(self._dark_switch)
+        widgets.append(self._fullscreen_combo)
         return widgets
 
     def _prefs_focus_cycle(self, delta):

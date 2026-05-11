@@ -355,3 +355,6 @@ class HistoryPage(Adw.Bin):
         if self._stack.get_visible_child_name() == "detail":
             self._show_list()
             return
+
+    def update_fonts(self, width, height):
+        pass

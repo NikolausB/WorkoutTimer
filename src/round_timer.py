@@ -81,9 +81,8 @@ class RoundTimerPage(Adw.Bin):
         root = self.get_root()
         if root is None:
             return GLib.SOURCE_CONTINUE
-        w = root.get_width()
-        h = root.get_height()
-        if w <= 0 or h <= 0:
+        w, h = root._font_dims()
+        if w <= 1 or h <= 1:
             return GLib.SOURCE_CONTINUE
         self.update_fonts(w, h)
         return GLib.SOURCE_REMOVE

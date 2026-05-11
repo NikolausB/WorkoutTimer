@@ -172,9 +172,8 @@ class TrainingPlanPage(Adw.Bin):
         def _on_runner_realize(*args):
             root = runner_widget.get_root()
             if root is not None:
-                w = root.get_width()
-                h = root.get_height()
-                if w > 0 and h > 0:
+                w, h = root._font_dims()
+                if w > 1 and h > 1:
                     runner_widget.update_fonts(w, h)
         self.connect("realize", _on_runner_realize)
 
@@ -762,9 +761,8 @@ class TrainingPlanPage(Adw.Bin):
         self._start_current_exercise()
         root = self.get_root()
         if root is not None:
-            w = root.get_width()
-            h = root.get_height()
-            if w > 0 and h > 0:
+            w, h = root._font_dims()
+            if w > 1 and h > 1:
                 self.update_fonts(w, h)
 
     def _update_runner_plan_label(self):

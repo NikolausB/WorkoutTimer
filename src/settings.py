@@ -36,6 +36,7 @@ DEFAULT_SETTINGS = {
     "gamepad_enabled": True,
     "gamepad_hints": True,
     "deck_mode": "auto",
+    "fullscreen_mode": "auto",
     "force_dark": False,
 }
 
@@ -62,6 +63,7 @@ class AppSettings:
     gamepad_enabled: bool = True
     gamepad_hints: bool = True
     deck_mode: str = "auto"
+    fullscreen_mode: str = "auto"
     force_dark: bool = False
 
     def get_sound(self, event_key: str) -> str | None:

@@ -206,3 +206,6 @@ class HomePage(Adw.Bin):
     def controller_back(self):
         if self._on_switch_to_plans:
             self._on_switch_to_plans()
+
+    def update_fonts(self, width, height):
+        pass

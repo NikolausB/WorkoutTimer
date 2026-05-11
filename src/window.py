@@ -75,15 +75,15 @@ class MainWindow(Adw.ApplicationWindow):
         self._rebuild_tabs()
         self._home.refresh()
 
-        self.connect("notify::is-fullscreen", self._on_window_resize)
-        self.connect("notify::is-maximized", self._on_window_resize)
         self.connect("realize", self._on_realize)
+        self.connect("notify::is-fullscreen", self._on_window_state_changed)
+        self.connect("notify::is-maximized", self._on_window_state_changed)
+        self.connect("notify::default-width", self._on_window_state_changed)
+        self.connect("notify::default-height", self._on_window_state_changed)
 
-        # Controller — initialised lazily in _on_realize() so the GTK main
-        # loop is already running (required by libmanette's udev monitor).
         self._controller = None
         self._open_dialog = None
-        self._deck_baseline = None
+        self._resize_timeout_id = 0
 
     # ---------- Controller Handling ----------
 
@@ -116,15 +116,15 @@ class MainWindow(Adw.ApplicationWindow):
         if display is None:
             return
         css = dedent("""
-            .deck-mode button {
+            .deck-mode button:not(.flat):not(.image-button) {
                 min-width: 64px;
-                min-height: 52px;
+                min-height: 44px;
             }
             .deck-mode .controller-hints-label {
-                font-size: 18px;
-                padding: 14px 20px;
-                border-radius: 24px;
-                background: rgba(0,0,0,0.45);
+                font-size: 15px;
+                padding: 10px 16px;
+                border-radius: 20px;
+                background: rgba(0,0,0,0.5);
                 color: white;
             }
         """)
@@ -316,9 +316,13 @@ class MainWindow(Adw.ApplicationWindow):
     # ---------- Existing methods ----------
 
     def _font_dims(self):
-        if self._deck_baseline is not None:
-            return self._deck_baseline
-        return (self.get_width(), self.get_height())
+        w = self._stack.get_allocated_width()
+        h = self._stack.get_allocated_height()
+        if w <= 1 or h <= 1:
+            w = self.get_width()
+            h = self.get_height()
+        h = max(h - 90, h // 2)
+        return (w, h)
 
     def _on_realize(self, *args):
         _log.info("Window realized — initialising controller")
@@ -330,31 +334,47 @@ class MainWindow(Adw.ApplicationWindow):
 
         if self._is_deck_mode():
             self._apply_deck_css()
-            self._deck_baseline = (1280, 800)
-            GLib.idle_add(self.fullscreen)
 
-        GLib.idle_add(self._initial_font_update)
+        self._apply_fullscreen_setting()
+        GLib.idle_add(self._do_font_update)
 
-    def _initial_font_update(self):
+    def _apply_fullscreen_setting(self):
+        mode = app_settings.fullscreen_mode
+        if mode == "on":
+            if not self.is_fullscreen():
+                GLib.idle_add(self.fullscreen)
+        elif mode == "off":
+            if self.is_fullscreen():
+                GLib.idle_add(self.unfullscreen)
+        elif mode == "auto" and self._is_deck_mode():
+            if not self.is_fullscreen():
+                GLib.idle_add(self.fullscreen)
+
+    def _on_window_state_changed(self, *args):
+        if self._resize_timeout_id > 0:
+            GLib.source_remove(self._resize_timeout_id)
+        self._resize_timeout_id = GLib.timeout_add(200, self._do_font_update)
+
+    def _do_font_update(self, *args):
         w, h = self._font_dims()
         if w <= 0 or h <= 0:
-            return GLib.SOURCE_CONTINUE
+            self._resize_timeout_id = 0
+            return GLib.SOURCE_REMOVE
+
         child = self._stack.get_visible_child()
         if child == self._round_timer:
             self._round_timer.update_fonts(w, h)
         elif child == self._training_plan:
             self._training_plan.update_fonts(w, h)
+        elif child == self._home:
+            self._home.update_fonts(w, h)
+        elif child == self._history:
+            self._history.update_fonts(w, h)
+        elif child == self._ai_coach:
+            self._ai_coach.update_fonts(w, h)
+
+        self._resize_timeout_id = 0
         return GLib.SOURCE_REMOVE
-
-    def _on_window_resize(self, *args):
-        w, h = self._font_dims()
-        if w <= 0 or h <= 0:
-            return
-        child = self._stack.get_visible_child()
-        if child == self._round_timer:
-            self._round_timer.update_fonts(w, h)
-        elif child == self._training_plan:
-            self._training_plan.update_fonts(w, h)
 
     def _rebuild_tabs(self):
         show_home = app_settings.show_home_page
@@ -389,14 +409,7 @@ class MainWindow(Adw.ApplicationWindow):
         elif child == self._home:
             self._home.refresh()
 
-        w, h = self._font_dims()
-        if w <= 0 or h <= 0:
-            return
-        if child == self._round_timer:
-            self._round_timer.update_fonts(w, h)
-        elif child == self._training_plan:
-            self._training_plan.update_fonts(w, h)
-
+        self._on_window_state_changed()
         self._update_hints_visibility()
 
     def _on_preferences_clicked(self, btn):
@@ -409,3 +422,4 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_dialog_closed(self):
         self._open_dialog = None
         self._rebuild_tabs()
+        self._apply_fullscreen_setting()

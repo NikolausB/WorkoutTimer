@@ -24,7 +24,7 @@ class ControllerHintsOverlay(Gtk.Box):
         self.set_visible(False)
         self.set_halign(Gtk.Align.END)
         self.set_valign(Gtk.Align.END)
-        self.set_margin_bottom(18)
+        self.set_margin_bottom(8)
         self._context = None
         self._sub_key = ""
 
