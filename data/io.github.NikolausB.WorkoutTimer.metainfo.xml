@@ -92,6 +92,21 @@
     <keyword>ai</keyword>
   </keywords>
   <releases>
+    <release version="1.1.6" date="2026-05-11">
+      <description>
+        <p>Steam Deck scaling fix: bottom controls and controller hints no longer cut off after switching tabs.</p>
+        <ul>
+          <li>Fixed font scaling to use content area dimensions instead of full window, preventing zoom-in on tab switch</li>
+          <li>Reserved bottom space for buttons and controller hints overlay in font calculations</li>
+          <li>Reduced timer font size ratio and cap for better fit on small screens</li>
+          <li>Scoped deck-mode button CSS to avoid inflating SpinRow controls</li>
+          <li>Added Fullscreen preference (Auto/On/Off) in Controller &amp; Deck Mode settings</li>
+          <li>Replaced hardcoded 1280×800 baseline with dynamic allocation-based sizing</li>
+          <li>Debounced font updates on resize to avoid flicker during fullscreen transitions</li>
+          <li>Reduced controller hints overlay size for less screen obstruction</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.4" date="2026-05-07">
       <description>
         <p>Image fix: reusable picture widget prevents workout resize. Plus editor layout, plan export/import.</p>
