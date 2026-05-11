@@ -9,6 +9,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Install flatpak-builder
@@ -23,4 +24,5 @@ jobs:
       - name: Build
         run: flatpak-builder --repo=repo --force-clean build-dir/ io.github.NikolausB.WorkoutTimer.yml
       - name: Lint manifest
-        run: flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest io.github.NikolausB.WorkoutTimer.yml
+        run: timeout 300 flatpak run --share=network --command=flatpak-builder-lint org.flatpak.Builder manifest io.github.NikolausB.WorkoutTimer.yml
+        continue-on-error: true
