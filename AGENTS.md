@@ -39,7 +39,8 @@ Raw controller input is read from `/dev/input/event*` (+ `/dev/input/js*` fallba
 ## UI conventions
 
 - Page content is wrapped in `Adw.Clamp` with 24 px page margins and 12 px group spacing.
-- Use `Adw.PreferencesGroup` / `Adw.PreferencesPage` for settings-style layouts.
+- Use `Adw.PreferencesGroup` / `Adw.PreferencesPage` for settings-style layouts. A `PreferencesGroup` only accepts preference rows — never put a `ListBox` inside it (it triggers `gtk_list_box_row_grab_focus: box != NULL` warnings).
+- Labels with `&` in their text must use the markup entity (`&amp;`), otherwise GTK fails to parse the markup.
 - The shared CSS class `controller-focus` gives the visible gamepad focus outline.
 - File dialogs use `gtk4::FileDialog` via `src/dialogs.rs` (not the deprecated FileChooserNative).
 
@@ -57,14 +58,20 @@ Removed options (not loaded/saved): `show_exercise_images`, `fullscreen_mode`.
 ## Additional subsystems
 
 - `src/progress_ring.rs`: cairo circular progress ring (runner + round timer), phase colors, `set_dimmed` for paused state.
-- `src/bar_chart.rs`: cairo bar chart used by the history page (8-week/12-month toggle).
+- `src/bar_chart.rs`: cairo bar chart used by the history page (range toggle 8 weeks/12 months × metric toggle time/volume/sessions).
+- `src/analytics.rs`: pure training analytics — Epley 1RM, volume load, work seconds, adherence, per-exercise personal records (`exercise_stats`), weekly buckets and `progressed_plan` (progressive overload: +1 rep / +2.5 kg / +5 s for completed exercises).
 - `src/backup.rs`: whole-data backup/restore, merge-by-id semantics.
+- `src/help_page.rs`: "Help & Shortcuts" window; the controller hint strings live in `src/controller_hints.rs::hints_for` (single source of truth for the hint bar and the help page).
+- `src/onboarding.rs`: first-run wizard (goal/equipment/frequency) that adds matching starter plans; `settings.onboarding_done` marks it as done. The bundled default plans are only auto-seeded once the wizard ran.
 - `src/timer.rs`: TimerCore is wall-clock anchored (Instant deadline); `add_seconds` for the runner's "+30s" button.
 - `src/data_store.rs::atomic_write`: all JSON persistence (plans, history, settings, user exercises) is atomic (tmp + rename).
-- Keyboard shortcuts (window-level EventControllerKey): Space = start/pause, S = skip, R = reset (timer + plan runner only; skipped while typing or when buttons have focus).
+- Undo: `window::show_app_toast_action(title, action, cb)` shows a toast with a button (used for deleted plans, sessions and custom exercises).
+- Keyboard shortcuts (window-level EventControllerKey): Space = start/pause, S = skip, R = reset (timer + plan runner only; skipped while typing or when buttons have focus), `?` = help, Ctrl+, = preferences.
 - Desktop notifications via `src/dialogs.rs::send_notification` on round-timer/training completion.
-- Settings extras (all `#[serde(default)]`, old files stay compatible): `sound_volume` (0-1), `last_tab`, `window_width`, `window_height` (restored/persisted via `close-request`).
-- Screenshot debug mode: `TRAINING_SHOT_DIR=/some/dir` renders every main tab to PNG at startup (uses WidgetPaintable + `gtk_snapshot_to_node` via ffi + one gsk renderer; unrealize the renderer before drop or GSK aborts).
+- Settings extras (all `#[serde(default)]`, old files stay compatible): `sound_volume` (0-1), `last_tab`, `window_width`, `window_height` (restored/persisted via `close-request`), `timer_config` (round timer setup, incl. prepare/warm-up/custom rounds), `onboarding_done`.
+- Round timer phases (`Phase`): Prepare → Warm-up → Round → Rest → Done; custom rounds (`RoundConfig::per_round`) override the global round/pause length.
+- History filters: `HistoryFilter { plan, days }` + `history::apply_filter` — list, chart and totals all use the filtered list (the filter combo notification is guarded by `updating_filters` to avoid a refresh loop).
+- Screenshot debug mode: `TRAINING_SHOT_DIR=/some/dir` renders every main tab to PNG at startup (uses WidgetPaintable + `gtk_snapshot_to_node` via ffi + one gsk renderer; unrealize the renderer before drop or GSK aborts). Skips the onboarding wizard.
 - AI Coach requests stream via SSE (`chat_completion_stream` in `src/llm.rs`, `stream:true`): progress (chars + tail) throttled to 200ms into the UI, a Cancel button aborts through an `Arc<AtomicBool>` checked between SSE lines, the worker call is wrapped in `catch_unwind` (a panic can no longer leave the spinner running forever), and non-SSE responses fall back to plain JSON parsing. `HTTP 410` gets a clear "model no longer available" message (Ollama retires cloud models). GLM models stream a long `delta.reasoning` phase first — surfaced as "Model is thinking…" (an unawaited `async_channel::send()` future is silently dropped: worker→UI events MUST use `send_blocking`). Live test: `AI_DEBUG=1 cargo test -- --ignored ai_coach` (or `STREAM_TEST_MODEL=<model> cargo test -- --ignored stream`).
 - Live LLM test: `STREAM_TEST_MODEL=<model> cargo test -- --ignored stream` (needs local Ollama).
 - Import functions return counts: `import_history_csv -> (sessions, skipped_rows)`, `import_plans_json -> Result<Vec<TrainingPlan>, String>`; results are surfaced as toasts.

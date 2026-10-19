@@ -5,16 +5,21 @@ A sport training application for Linux, built with GTK 4, libadwaita, and Rust.
 ## Features
 
 - **Home Page** — Quick access to continue your last workout, recommended plans, and browse all plans
-- **Round Timer** — Configurable rounds, duration, and pause periods with audio alerts
+- **Round Timer** — Configurable rounds, duration, and pause periods with audio alerts, plus a prepare countdown, an optional warm-up round, custom per-round intervals (ladders like 20/40/60 s) and an activity title; the setup is remembered across restarts
 - **Training Plan Builder** — Create plans with timed and rep-based exercises, multi-round circuits with configurable rest between rounds
-- **AI Coach** — Generate training plans with local LLMs (Ollama) or OpenAI-compatible APIs
+- **Progression Tracking** — Personal records per exercise, estimated 1RM (Epley), volume load and adherence; the new **Progress** page in the history shows weekly volume and your records
+- **Progressive Overload Helper** — “Progress this plan” creates a copy of a plan with one more rep, 2.5 kg more weight or 5 s more time for everything you actually completed last time
+- **AI Coach** — Generate training plans with local LLMs (Ollama) or OpenAI-compatible APIs; streams the answer, shows the model's reasoning phase, can be cancelled and reports errors properly
+- **First-Run Wizard** — Goal, equipment and weekly frequency, then matching starter plans are added automatically
 - **Built-in Exercise Database** — 873 exercises from [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (Unlicense)
-- **11 Default Training Plans** — Including pop culture-inspired plans (Saitama, Demon Slayer Corps, Rocky)
+- **11 Default Training Plans** — Including pop culture-inspired plans (Saitama, Demon Slayer Corps, Rocky); they can also be added as templates from the plans page
 - **Multi-Round Circuits** — Repeat all exercises for multiple rounds with configurable rest between rounds
-- **Training History** — Per-session detail with per-exercise logging (actual vs planned, plus start/end times), CSV export/import
+- **Training History** — Per-session detail with per-exercise logging (actual vs planned, plus start/end times), CSV export/import, and filters for plan and time period
+- **Undo** — Deleting a plan, a session or a custom exercise can be undone from the toast
+- **Help & Shortcuts** — A window (header button, `?` key or the Home entry) with every keyboard and gamepad shortcut
 - **Customizable Sounds** — Choose different sounds for round start, round end, exercise complete, round break, and training complete
 - **Fullscreen Mode** — Guide button (controller) or F11 key for distraction-free workouts
-- **Gamepad & Controller Support** — Full controller navigation for Steam Deck and desktop gamepads (Xbox, PlayStation, generic). D-pad focus cycling with visible outline, A/B/X/Y/Start/Select/Guide button mapping, trigger scrolling, and in-workout confirmation dialogs — all controller-navigable
+- **Gamepad & Controller Support** — Full controller navigation for Steam Deck and desktop gamepads (Xbox, PlayStation, 8BitDo, generic). D-pad focus cycling with visible outline, A/B/X/Y/Start/Select/Guide button mapping, trigger scrolling, and in-workout confirmation dialogs — all controller-navigable
 - **Add Custom Exercises** — Add your own exercises to the built-in database
 - **Tab Visibility** — Show or hide tabs (Home, Timer, Training Plans, AI Coach) in Preferences
 

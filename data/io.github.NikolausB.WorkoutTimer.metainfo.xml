@@ -91,6 +91,32 @@
     <keyword>ai</keyword>
   </keywords>
   <releases>
+    <release version="1.4.0" date="2026-10-20">
+      <description>
+        <p>
+          New features:
+        </p>
+        <ul>
+          <li>Progression tracking: personal records, estimated 1RM, volume load and adherence</li>
+          <li>New Progress page in the history with weekly volume and per-exercise records</li>
+          <li>“Progress this plan” creates a copy of a plan with more reps or weight</li>
+          <li>Round timer: prepare countdown, warm-up round, custom per-round intervals and a summary</li>
+          <li>History filters for plan and time period</li>
+          <li>First-run wizard that sets up starter plans</li>
+          <li>Undo for deleting plans, sessions and custom exercises</li>
+          <li>Help window with all keyboard and gamepad shortcuts</li>
+        </ul>
+        <p>
+          Fixes:
+        </p>
+        <ul>
+          <li>Gamepad buttons now work (the signal payload was read from the wrong argument)</li>
+          <li>AI Coach: streaming progress, reasoning display, cancel button and working error reporting</li>
+          <li>Scaled timer fonts are applied when a tab or the workout runner is opened</li>
+          <li>Plan list follows the visual order (plans between “New Plan” and Export/Import)</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.3.0" date="2026-10-11">
       <description>
         <p>Complete rewrite in Rust with a redesigned workout experience.</p>
