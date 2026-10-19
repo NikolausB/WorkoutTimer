@@ -100,7 +100,11 @@ impl MainWindow {
             .build();
 
         let store = Rc::new(DataStore::new());
-        store.seed_default_plans();
+        // The first-run wizard provides the starter plans; only seed the
+        // bundled ones for users who already finished the wizard.
+        if load_settings().onboarding_done {
+            store.seed_default_plans();
+        }
 
         let sound = Rc::new(SoundPlayer::new());
 

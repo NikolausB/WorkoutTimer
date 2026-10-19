@@ -45,7 +45,11 @@ fn main() {
         main_window.gtk_window().present();
 
         // First run: the onboarding wizard sets up starter plans.
-        if !crate::settings::load_settings().onboarding_done {
+        // (skipped in screenshot/debug mode: the modal window would block
+        // the main window from being mapped)
+        if !crate::settings::load_settings().onboarding_done
+            && std::env::var("TRAINING_SHOT_DIR").is_err()
+        {
             main_window.open_onboarding();
         }
     });
@@ -98,7 +102,7 @@ mod ui_tests {
             std::thread::sleep(std::time::Duration::from_millis(40));
         }
 
-        let history = crate::history::HistoryPage::new(store);
+        let history = crate::history::HistoryPage::new(Rc::clone(&store));
         history.refresh();
         history.refresh();
 
@@ -253,6 +257,11 @@ mod ui_tests {
                 strength.iter().any(|p| p.name.contains("Strength")),
                 "strength goal should recommend a strength plan"
             );
+
+            // The wizard window must build without a parent window.
+            let parent = libadwaita::Window::new();
+            let _wizard =
+                crate::onboarding::OnboardingWindow::new(&parent, Rc::clone(&store));
         }
 
         // History filter: plan + period.

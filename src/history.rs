@@ -301,14 +301,14 @@ impl HistoryPage {
         progress_box.append(&progress_chart_title);
         progress_box.append(progress_chart.widget());
 
-        let progress_group = libadwaita::PreferencesGroup::builder()
-            .title("Personal Records")
-            .build();
+        // A plain list box (a PreferencesGroup only accepts preference rows).
+        let pr_title = Label::new(Some("Personal Records"));
+        pr_title.add_css_class("heading");
+        progress_box.append(&pr_title);
         let progress_list_box = ListBox::new();
         progress_list_box.add_css_class("boxed-list");
         progress_list_box.set_selection_mode(gtk4::SelectionMode::None);
-        progress_group.add(&progress_list_box);
-        progress_box.append(&progress_group);
+        progress_box.append(&progress_list_box);
 
         progress_clamp.set_child(Some(&progress_box));
         progress_scrolled.set_child(Some(&progress_clamp));

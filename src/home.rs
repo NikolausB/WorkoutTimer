@@ -79,7 +79,7 @@ impl HomePage {
         // Always visible: help entry point (also gamepad reachable)
         let more_card = PreferencesGroup::builder().title("More").build();
         let help_row = ActionRow::builder()
-            .title("Help & Shortcuts")
+            .title("Help &amp; Shortcuts")
             .subtitle("Keyboard and gamepad controls")
             .activatable(true)
             .build();
