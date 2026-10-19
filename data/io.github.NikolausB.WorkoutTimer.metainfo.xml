@@ -91,6 +91,28 @@
     <keyword>ai</keyword>
   </keywords>
   <releases>
+    <release version="1.3.0" date="2026-10-11">
+      <description>
+        <p>Complete rewrite in Rust with a redesigned workout experience.</p>
+        <ul>
+          <li>Rewritten in Rust (GTK 4 / libadwaita) with identical data formats — plans, history, settings and CSV files stay fully compatible</li>
+          <li>Runner redesign: circular progress ring with countdown, overall workout progress bar, color-coded phases (GO / REST / BREAK), next-exercise card</li>
+          <li>Round timer redesign: progress ring, phase colors, and one-tap presets (Boxing, Tabata, HIIT, Endurance)</li>
+          <li>Home dashboard with weekly sessions, total training time, and day streak</li>
+          <li>History: weekly/monthly training chart, totals, and month-grouped session list</li>
+          <li>Preferences rebuilt on Adw.PreferencesDialog with sound volume control and full backup/restore</li>
+          <li>Toast notifications for save/import/export actions</li>
+          <li>Keyboard shortcuts: Space = start/pause, S = skip, R = reset</li>
+          <li>Desktop notifications when a round timer or training completes</li>
+          <li>+30s button during timed exercises and rests; ring dims while paused</li>
+          <li>Duplicate plans with one click; per-plan statistics in the editor</li>
+          <li>Exercise picker: category filter alongside search</li>
+          <li>Atomic data file writes, drift-free wall-clock timers, detailed import feedback</li>
+          <li>Window size and last tab are remembered between sessions</li>
+          <li>Flatpak runtime bumped to GNOME 51</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-07-27">
       <description>
         <p>Favorite plans, improved editor UX, persistent preferences, better virtual keyboard, richer history logging, and a tristate color scheme.</p>

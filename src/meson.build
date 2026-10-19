@@ -1,42 +1,33 @@
 pkgdatadir = join_paths(get_option('datadir'), 'training')
 
-python_modules = [
-  '__init__.py',
-  'ai_coach.py',
-  'app_style.css',
-  'controller_focus.py',
-  'controller_hints.py',
-  'controller_manager.py',
-  'csv_io.py',
-  'data_store.py',
-  'exercise_picker.py',
-  'history.py',
-  'home.py',
-  'image_utils.py',
-  'llm_client.py',
-  'models.py',
-  'preferences.py',
-  'round_timer.py',
-  'settings.py',
-  'sound.py',
-  'timer_core.py',
-  'training_plan.py',
-  'ui_scaling.py',
-  'user_exercises.py',
-  'virtual_keyboard.py',
-  'window.py',
-]
+cargo = find_program('cargo', required: true)
 
-install_data(
-  python_modules,
-  install_dir: pkgdatadir,
+cargo_options = ['--manifest-path', meson.project_source_root() / 'Cargo.toml']
+cargo_options += ['--target-dir', meson.project_build_root() / 'target']
+cargo_options += ['--release']
+rust_target = 'release'
+
+custom_target(
+  'cargo-build',
+  build_by_default: true,
+  build_always_stale: true,
+  output: 'training',
+  console: true,
+  install: true,
+  install_dir: bindir,
+  env: {
+    'CARGO_HOME': meson.project_build_root() / 'cargo-home',
+    'CARGO_NET_OFFLINE': 'false',
+  },
+  command: [
+    cargo, 'build', cargo_options, '&&',
+    'cp', meson.project_build_root() / 'target' / rust_target / 'training', '@OUTPUT@',
+  ],
 )
 
 install_data(
-  'main.py',
-  install_dir: get_option('bindir'),
-  install_mode: 'rwxr-xr-x',
-  rename: 'training',
+  'app_style.css',
+  install_dir: pkgdatadir,
 )
 
 install_data(

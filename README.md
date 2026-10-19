@@ -1,6 +1,6 @@
 # Workout Timer
 
-A sport training application for Linux, built with GTK 4 and libadwaita.
+A sport training application for Linux, built with GTK 4, libadwaita, and Rust.
 
 ## Features
 
@@ -88,9 +88,11 @@ flatpak run io.github.NikolausB.WorkoutTimer
 
 ```bash
 bash run.sh
+# or
+cargo run
 ```
 
-Requires: Python 3.9+, GTK 4, libadwaita, GStreamer, PyGObject
+Requires: Rust (rustup), GTK 4.18+, libadwaita 1.7+, GStreamer 1.x development packages.
 
 ## Multi-Round Circuits
 

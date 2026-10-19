@@ -56,3 +56,40 @@
 .keyboard-key.space-key {
     min-width: 160px;
 }
+
+/* Phase colors: runner + round timer */
+.phase-go { color: #33d17a; }
+.phase-rest { color: #3584e4; }
+.phase-break { color: #e66100; }
+.phase-done { color: #f5c211; }
+.phase-reps { color: @accent_color; }
+
+/* Runner workout progress */
+.runner-progress-bar {
+    min-height: 10px;
+}
+.runner-progress-bar trough {
+    border-radius: 6px;
+}
+.runner-progress-bar trough highlight {
+    border-radius: 6px;
+}
+
+/* Home dashboard stat cards */
+.stat-card {
+    padding: 18px 20px;
+    border-radius: 12px;
+}
+.stat-card .stat-value {
+    font-size: 26px;
+    font-weight: 700;
+}
+.stat-card .stat-caption {
+    font-size: 13px;
+}
+.deck-mode .stat-card {
+    padding: 22px 26px;
+}
+.deck-mode .stat-card .stat-value {
+    font-size: 32px;
+}

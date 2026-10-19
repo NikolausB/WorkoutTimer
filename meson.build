@@ -1,6 +1,6 @@
-project('workout-timer', 'c',
-  version: '1.2.0',
-  meson_version: '>= 0.59.0',
+project('workout-timer', ['c', 'rust'],
+  version: '1.3.0',
+  meson_version: '>= 0.63.0',
 )
 
 prefix = get_option('prefix')
