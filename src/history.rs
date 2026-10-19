@@ -26,10 +26,16 @@ pub struct HistoryPage {
     chart: BarChart,
     chart_title: Label,
     chart_mode: Cell<u8>, // 0 = 8 weeks, 1 = 12 months
+    chart_metric: Cell<u8>, // 0 = minutes, 1 = volume (kg)
     stats_box: GtkBox,
     sessions: RefCell<Vec<TrainingSession>>,
     session_rows: RefCell<Vec<ActionRow>>,
     on_switch_to_timer: RefCell<Option<Rc<dyn Fn()>>>,
+    progress_page: NavigationPage,
+    progress_chart: Rc<BarChart>,
+    progress_chart_title: Label,
+    progress_stats_box: GtkBox,
+    progress_list_box: ListBox,
     self_weak: RefCell<std::rc::Weak<HistoryPage>>,
     current_session_id: RefCell<Option<String>>,
     list_focus: RefCell<ControllerFocusTracker>,
@@ -69,6 +75,13 @@ impl HistoryPage {
             .tooltip_text("Import history from CSV")
             .build();
         io_box.append(&import_btn);
+        let progress_btn = Button::builder()
+            .label("Progress")
+            .icon_name("view-paged-symbolic")
+            .css_classes(["flat"])
+            .tooltip_text("Personal records and volume")
+            .build();
+        io_box.append(&progress_btn);
         list_box.append(&io_box);
 
         // Statistics: chart + totals
@@ -77,18 +90,35 @@ impl HistoryPage {
         stats_box.set_margin_top(4);
         list_box.append(&stats_box);
 
-        // Chart range toggle
-        let chart_toggle_box = GtkBox::new(Orientation::Horizontal, 0);
+        // Chart range + metric toggles
+        let chart_toggle_box = GtkBox::new(Orientation::Horizontal, 12);
         chart_toggle_box.set_halign(Align::End);
-        chart_toggle_box.add_css_class("linked");
+        let range_box = GtkBox::new(Orientation::Horizontal, 0);
+        range_box.add_css_class("linked");
         let weeks_btn = gtk4::ToggleButton::builder()
             .label("8 Weeks")
             .active(true)
             .build();
         let months_btn = gtk4::ToggleButton::builder().label("12 Months").build();
         months_btn.set_group(Some(&weeks_btn));
-        chart_toggle_box.append(&weeks_btn);
-        chart_toggle_box.append(&months_btn);
+        range_box.append(&weeks_btn);
+        range_box.append(&months_btn);
+        chart_toggle_box.append(&range_box);
+
+        let metric_box = GtkBox::new(Orientation::Horizontal, 0);
+        metric_box.add_css_class("linked");
+        let time_metric_btn = gtk4::ToggleButton::builder()
+            .label("Time")
+            .active(true)
+            .build();
+        let volume_metric_btn = gtk4::ToggleButton::builder().label("Volume").build();
+        volume_metric_btn.set_group(Some(&time_metric_btn));
+        let sessions_metric_btn = gtk4::ToggleButton::builder().label("Sessions").build();
+        sessions_metric_btn.set_group(Some(&time_metric_btn));
+        metric_box.append(&time_metric_btn);
+        metric_box.append(&volume_metric_btn);
+        metric_box.append(&sessions_metric_btn);
+        chart_toggle_box.append(&metric_box);
         list_box.append(&chart_toggle_box);
 
         let chart = BarChart::new(150);
@@ -185,6 +215,50 @@ impl HistoryPage {
         detail_page.set_child(Some(&detail_toolbar));
         nav.add(&detail_page);
 
+        // ---- Progress page ----
+        let progress_toolbar = libadwaita::ToolbarView::new();
+        let progress_header_bar = libadwaita::HeaderBar::new();
+        progress_header_bar.set_show_start_title_buttons(false);
+        progress_header_bar.set_show_end_title_buttons(false);
+        progress_toolbar.add_top_bar(&progress_header_bar);
+
+        let progress_scrolled = ScrolledWindow::new();
+        progress_scrolled.set_vexpand(true);
+        let progress_clamp = Clamp::new();
+        let progress_box = GtkBox::new(Orientation::Vertical, 12);
+        progress_box.set_margin_top(12);
+        progress_box.set_margin_bottom(12);
+        progress_box.set_margin_start(12);
+        progress_box.set_margin_end(12);
+
+        let progress_stats_box = GtkBox::new(Orientation::Horizontal, 12);
+        progress_stats_box.set_homogeneous(true);
+        progress_box.append(&progress_stats_box);
+
+        let progress_chart = Rc::new(BarChart::new(150));
+        let progress_chart_title = Label::new(Some("Volume per week (last 8 weeks)"));
+        progress_chart_title.add_css_class("dim-label");
+        progress_chart_title.set_halign(Align::Start);
+        progress_box.append(&progress_chart_title);
+        progress_box.append(progress_chart.widget());
+
+        let progress_group = libadwaita::PreferencesGroup::builder()
+            .title("Personal Records")
+            .build();
+        let progress_list_box = ListBox::new();
+        progress_list_box.add_css_class("boxed-list");
+        progress_list_box.set_selection_mode(gtk4::SelectionMode::None);
+        progress_group.add(&progress_list_box);
+        progress_box.append(&progress_group);
+
+        progress_clamp.set_child(Some(&progress_box));
+        progress_scrolled.set_child(Some(&progress_clamp));
+        progress_toolbar.set_content(Some(&progress_scrolled));
+
+        let progress_page = NavigationPage::builder().title("Progress").build();
+        progress_page.set_child(Some(&progress_toolbar));
+        nav.add(&progress_page);
+
         widget.set_child(Some(&nav));
 
         let page = Rc::new(Self {
@@ -197,10 +271,16 @@ impl HistoryPage {
             chart,
             chart_title,
             chart_mode: Cell::new(0),
+            chart_metric: Cell::new(0),
             stats_box,
             sessions: RefCell::new(Vec::new()),
             session_rows: RefCell::new(Vec::new()),
             on_switch_to_timer: RefCell::new(None),
+            progress_page: progress_page.clone(),
+            progress_chart: progress_chart.clone(),
+            progress_chart_title: progress_chart_title.clone(),
+            progress_stats_box: progress_stats_box.clone(),
+            progress_list_box: progress_list_box.clone(),
             self_weak: RefCell::new(std::rc::Weak::new()),
             current_session_id: RefCell::new(None),
             list_focus: RefCell::new(ControllerFocusTracker::new()),
@@ -221,6 +301,48 @@ impl HistoryPage {
                     if let Some(ref cb) = *p.on_switch_to_timer.borrow() {
                         cb();
                     }
+                }
+            });
+        }
+        {
+            let page_weak = Rc::downgrade(&page);
+            let btn = volume_metric_btn.clone();
+            btn.connect_toggled(move |b| {
+                if !b.is_active() {
+                    return;
+                }
+                if let Some(p) = page_weak.upgrade() {
+                    p.chart_metric.set(1);
+                    let sessions = p.sessions.borrow().clone();
+                    p.update_stats_chart(&sessions);
+                }
+            });
+        }
+        {
+            let page_weak = Rc::downgrade(&page);
+            let btn = sessions_metric_btn.clone();
+            btn.connect_toggled(move |b| {
+                if !b.is_active() {
+                    return;
+                }
+                if let Some(p) = page_weak.upgrade() {
+                    p.chart_metric.set(2);
+                    let sessions = p.sessions.borrow().clone();
+                    p.update_stats_chart(&sessions);
+                }
+            });
+        }
+        {
+            let page_weak = Rc::downgrade(&page);
+            let btn = time_metric_btn.clone();
+            btn.connect_toggled(move |b| {
+                if !b.is_active() {
+                    return;
+                }
+                if let Some(p) = page_weak.upgrade() {
+                    p.chart_metric.set(0);
+                    let sessions = p.sessions.borrow().clone();
+                    p.update_stats_chart(&sessions);
                 }
             });
         }
@@ -268,6 +390,15 @@ impl HistoryPage {
                         p.show_detail(&session);
                     }
                 }
+            });
+        }
+
+        {
+            let page_weak = Rc::downgrade(&page);
+            progress_btn.connect_clicked(move |_| {
+                let Some(p) = page_weak.upgrade() else { return };
+                p.refresh_progress();
+                p.nav.push(&p.progress_page);
             });
         }
 
@@ -397,9 +528,11 @@ impl HistoryPage {
         self.list_focus.borrow_mut().focus_first();
     }
 
-    /// Build (label, minutes) bars for the current chart mode.
+    /// Build (label, value) bars for the current chart range and metric.
     fn chart_data(&self, sessions: &[TrainingSession]) -> (Vec<(String, f64)>, String) {
         let today = chrono::Local::now().date_naive();
+        let by_volume = self.chart_metric.get() == 1;
+        let by_sessions = self.chart_metric.get() == 2;
 
         if self.chart_mode.get() == 1 {
             // Last 12 calendar months
@@ -411,17 +544,32 @@ impl HistoryPage {
                 let start = chrono::NaiveDate::from_ymd_opt(y, mo, 1).unwrap();
                 let (ny, nm) = if mo == 12 { (y + 1, 1) } else { (y, mo + 1) };
                 let end = chrono::NaiveDate::from_ymd_opt(ny, nm, 1).unwrap();
-                let minutes: f64 = sessions
+                let value: f64 = sessions
                     .iter()
                     .filter(|s| {
                         let d = s.started_at.date_naive();
                         d >= start && d < end
                     })
-                    .map(|s| s.total_actual_seconds as f64 / 60.0)
+                    .map(|s| {
+                        if by_volume {
+                            crate::analytics::session_volume(s)
+                        } else if by_sessions {
+                            1.0
+                        } else {
+                            s.total_actual_seconds as f64 / 60.0
+                        }
+                    })
                     .sum();
-                bars.push((start.format("%b").to_string(), minutes));
+                bars.push((start.format("%b").to_string(), value));
             }
-            return (bars, "Minutes per month (last 12 months)".to_string());
+            let title = if by_volume {
+                "Volume load per month (last 12 months)".to_string()
+            } else if by_sessions {
+                "Sessions per month (last 12 months)".to_string()
+            } else {
+                "Minutes per month (last 12 months)".to_string()
+            };
+            return (bars, title);
         }
 
         // Last 8 ISO weeks
@@ -440,7 +588,14 @@ impl HistoryPage {
                 .sum();
             bars.push((ws.format("%d.%m.").to_string(), minutes));
         }
-        (bars, "Minutes per week (last 8 weeks)".to_string())
+        let title = if by_volume {
+            "Volume load per week (last 8 weeks)".to_string()
+        } else if by_sessions {
+            "Sessions per week (last 8 weeks)".to_string()
+        } else {
+            "Minutes per week (last 8 weeks)".to_string()
+        };
+        (bars, title)
     }
 
     /// Chart + totals, honoring the 8-weeks / 12-months toggle.
@@ -495,6 +650,119 @@ impl HistoryPage {
             card.append(&value_label);
             card.append(&caption_label);
             self.stats_box.append(&card);
+        }
+    }
+
+    /// Rebuild the Progress page: volume chart, summary cards and the
+    /// per-exercise personal records.
+    pub fn refresh_progress(&self) {
+        let sessions = self.store.load_sessions();
+
+        // Weekly volume chart
+        let weekly = crate::analytics::weekly_volume(&sessions, 8);
+        self.progress_chart
+            .set_data(weekly.iter().map(|(l, v)| (l.clone(), *v)).collect());
+        let weekly_sessions = crate::analytics::weekly_sessions(&sessions, 8);
+        let session_count: usize = weekly_sessions.iter().map(|(_, c)| *c).sum();
+        self.progress_chart_title.set_label(&format!(
+            "Volume load per week (last 8 weeks · {} workouts)",
+            session_count
+        ));
+
+        // Summary cards
+        let mut child = self.progress_stats_box.first_child();
+        while let Some(c) = child {
+            child = c.next_sibling();
+            self.progress_stats_box.remove(&c);
+        }
+        let total_volume: f64 = sessions.iter().map(crate::analytics::session_volume).sum();
+        let adherence = crate::analytics::adherence(&sessions);
+        let stats = crate::analytics::exercise_stats(&sessions);
+        let best_1rm = stats
+            .iter()
+            .map(|s| s.best_est_1rm)
+            .fold(0.0f64, f64::max);
+
+        let work_seconds: i64 = sessions.iter().map(crate::analytics::session_work_seconds).sum();
+        let work_str = if work_seconds >= 3600 {
+            format!("{}h {}m", work_seconds / 3600, (work_seconds % 3600) / 60)
+        } else {
+            format!("{}m", work_seconds / 60)
+        };
+
+        let cards = [
+            (format!("{:.0} kg", total_volume), "Total Volume"),
+            (format!("{:.0}%", adherence * 100.0), "Adherence"),
+            (
+                if best_1rm > 0.0 {
+                    format!("{:.0} kg", best_1rm)
+                } else {
+                    "-".to_string()
+                },
+                "Best Est. 1RM",
+            ),
+            (work_str, "Work Time"),
+        ];
+        for (value, caption) in cards {
+            let card = GtkBox::new(Orientation::Vertical, 2);
+            card.add_css_class("card");
+            card.add_css_class("stat-card");
+            let value_label = Label::new(Some(&value));
+            value_label.add_css_class("stat-value");
+            value_label.set_halign(Align::Center);
+            let caption_label = Label::new(Some(caption));
+            caption_label.add_css_class("stat-caption");
+            caption_label.add_css_class("dim-label");
+            caption_label.set_halign(Align::Center);
+            card.append(&value_label);
+            card.append(&caption_label);
+            self.progress_stats_box.append(&card);
+        }
+
+        // Personal records
+        while let Some(row) = self.progress_list_box.row_at_index(0) {
+            self.progress_list_box.remove(&row);
+        }
+        if stats.is_empty() {
+            let row = ActionRow::builder()
+                .title("No records yet")
+                .subtitle("Complete a workout to see your personal records")
+                .build();
+            self.progress_list_box.append(&row);
+            return;
+        }
+        for stat in stats {
+            let mut details: Vec<String> = Vec::new();
+            if stat.best_est_1rm > 0.0 {
+                let arrow = match stat.trend() {
+                    1 => " ↑",
+                    -1 => " ↓",
+                    _ => "",
+                };
+                details.push(format!("Est. 1RM {:.0} kg{}", stat.best_est_1rm, arrow));
+            }
+            if stat.best_reps > 0 {
+                details.push(format!(
+                    "Best set {} reps @ {:.1} kg",
+                    stat.best_reps, stat.best_reps_weight
+                ));
+            }
+            if stat.best_time_seconds > 0 {
+                details.push(format!("Longest {}s", stat.best_time_seconds));
+            }
+            details.push(format!("{} sets", stat.total_sets));
+            if stat.total_volume_kg > 0.0 {
+                details.push(format!("{:.0} kg volume", stat.total_volume_kg));
+            }
+            if let Some(last) = stat.last_trained {
+                details.push(format!("last {}", last.format("%d.%m.%Y")));
+            }
+
+            let row = ActionRow::builder()
+                .title(&stat.name)
+                .subtitle(details.join(" · "))
+                .build();
+            self.progress_list_box.append(&row);
         }
     }
 

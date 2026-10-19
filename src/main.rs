@@ -1,4 +1,5 @@
 mod ai_coach;
+mod analytics;
 mod backup;
 mod bar_chart;
 mod controller_focus;
@@ -234,6 +235,59 @@ mod ui_tests {
                 templates.len()
             );
             assert!(templates.iter().all(|p| !p.exercises.is_empty()));
+        }
+
+        // Progression: a copy with more reps is created from a logged session.
+        {
+            use crate::models::{Exercise, ExerciseLog, TrainingPlan, TrainingSession};
+            let plan = TrainingPlan {
+                name: "Push".to_string(),
+                exercises: vec![Exercise {
+                    name: "Pushups".to_string(),
+                    reps: Some(10),
+                    weight_kg: None,
+                    duration_seconds: None,
+                    rest_seconds: 30,
+                    image_path: None,
+                    sets: 1,
+                }],
+                ..Default::default()
+            };
+            let session = TrainingSession {
+                id: uuid::Uuid::new_v4().to_string(),
+                plan_id: plan.id.clone(),
+                plan_name: plan.name.clone(),
+                started_at: chrono::Local::now(),
+                finished_at: Some(chrono::Local::now()),
+                total_planned_seconds: 300,
+                total_actual_seconds: 300,
+                total_rounds: 1,
+                rest_between_rounds_seconds: 30,
+                exercises: vec![ExerciseLog {
+                    exercise_name: "Pushups".to_string(),
+                    planned_duration_seconds: None,
+                    actual_duration_seconds: None,
+                    planned_reps: Some(10),
+                    actual_reps: Some(10),
+                    planned_weight_kg: None,
+                    actual_weight_kg: None,
+                    rest_seconds: 30,
+                    actual_rest_seconds: None,
+                    completed: true,
+                    round_number: 1,
+                    started_at: None,
+                    finished_at: None,
+                    set_number: 1,
+                }],
+            };
+            let progressed = crate::analytics::progressed_plan(&plan, &session);
+            assert_eq!(progressed.exercises[0].reps, Some(11));
+            assert_ne!(progressed.id, plan.id);
+
+            // The stats must find the personal record.
+            let stats = crate::analytics::exercise_stats(&[session]);
+            assert_eq!(stats.len(), 1);
+            assert_eq!(stats[0].best_reps, 10);
         }
     }
 

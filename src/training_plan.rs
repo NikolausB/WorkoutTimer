@@ -896,6 +896,46 @@ impl TrainingPlanPage {
             }
             row.add_suffix(&dup_btn);
 
+            // "Progress this plan": create a copy with increased loads based on
+            // the last session of this plan.
+            {
+                let store = Rc::clone(&self.store);
+                let plan_clone = plan.clone();
+                let page_weak = self.self_weak.borrow().clone();
+                let prog_btn = Button::builder()
+                    .icon_name("media-play-forward-symbolic")
+                    .css_classes(["flat"])
+                    .tooltip_text("Progress this plan (more reps/weight)")
+                    .build();
+                prog_btn.set_valign(Align::Center);
+                prog_btn.connect_clicked(move |_| {
+                    let sessions = store.load_sessions();
+                    let Some(last) = crate::analytics::last_session_for_plan(&sessions, &plan_clone)
+                    else {
+                        crate::window::show_app_toast(
+                            "Train this plan once to unlock automatic progression",
+                        );
+                        return;
+                    };
+                    let new_plan = crate::analytics::progressed_plan(&plan_clone, last);
+                    store.save_plan(&new_plan);
+                    if let Some(p) = page_weak.upgrade() {
+                        p.refresh_plans();
+                    }
+                    let store2 = Rc::clone(&store);
+                    let new_plan_clone = new_plan.clone();
+                    crate::window::show_app_toast_action(
+                        &format!("Created \"{}\"", new_plan.name),
+                        "Undo",
+                        Rc::new(move || {
+                            store2.delete_plan(&new_plan_clone.id);
+                            crate::window::refresh_all_pages();
+                        }),
+                    );
+                });
+                row.add_suffix(&prog_btn);
+            }
+
             self.plan_list_box.append(&row);
         }
 
