@@ -15,6 +15,7 @@ mod home;
 mod image_utils;
 mod llm;
 mod models;
+mod onboarding;
 mod preferences;
 mod progress_ring;
 mod round_timer;
@@ -42,6 +43,11 @@ fn main() {
     app.connect_activate(|app| {
         let main_window = window::MainWindow::new(app);
         main_window.gtk_window().present();
+
+        // First run: the onboarding wizard sets up starter plans.
+        if !crate::settings::load_settings().onboarding_done {
+            main_window.open_onboarding();
+        }
     });
 
     // Debug: TRAINING_SHOT_DIR=/path renders every tab to PNG (used for store
@@ -235,6 +241,53 @@ mod ui_tests {
                 templates.len()
             );
             assert!(templates.iter().all(|p| !p.exercises.is_empty()));
+        }
+
+        // Onboarding: the recommended plans must match the chosen goal.
+        {
+            let strength = crate::onboarding::recommend_plans(1, 0);
+            let cardio = crate::onboarding::recommend_plans(2, 3);
+            assert!(!strength.is_empty(), "no plans recommended for strength");
+            assert!(!cardio.is_empty(), "no plans recommended for cardio");
+            assert!(
+                strength.iter().any(|p| p.name.contains("Strength")),
+                "strength goal should recommend a strength plan"
+            );
+        }
+
+        // History filter: plan + period.
+        {
+            use crate::history::{apply_filter, HistoryFilter};
+            use crate::models::TrainingSession;
+            let now = chrono::Local::now();
+            let mk = |name: &str, days_ago: i64| TrainingSession {
+                id: uuid::Uuid::new_v4().to_string(),
+                plan_id: name.to_string(),
+                plan_name: name.to_string(),
+                started_at: now - chrono::Duration::days(days_ago),
+                finished_at: Some(now),
+                total_planned_seconds: 600,
+                total_actual_seconds: 600,
+                total_rounds: 1,
+                rest_between_rounds_seconds: 60,
+                exercises: vec![],
+            };
+            let sessions = vec![mk("Push", 1), mk("Push", 40), mk("Pull", 2)];
+
+            let all = HistoryFilter::default();
+            assert_eq!(apply_filter(&sessions, &all).len(), 3);
+
+            let by_plan = HistoryFilter {
+                plan: "Push".to_string(),
+                days: 0,
+            };
+            assert_eq!(apply_filter(&sessions, &by_plan).len(), 2);
+
+            let recent = HistoryFilter {
+                plan: String::new(),
+                days: 7,
+            };
+            assert_eq!(apply_filter(&sessions, &recent).len(), 2);
         }
 
         // Progression: a copy with more reps is created from a logged session.

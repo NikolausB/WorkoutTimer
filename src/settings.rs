@@ -71,6 +71,12 @@ pub struct AppSettings {
     pub window_width: i32,
     #[serde(default)]
     pub window_height: i32,
+    /// Round timer configuration (kept across restarts).
+    #[serde(default)]
+    pub timer_config: Option<crate::models::RoundConfig>,
+    /// Set once the user finished the first-run wizard.
+    #[serde(default)]
+    pub onboarding_done: bool,
 }
 
 fn default_true() -> bool {
@@ -137,6 +143,8 @@ impl Default for AppSettings {
             last_tab: String::new(),
             window_width: 0,
             window_height: 0,
+            timer_config: None,
+            onboarding_done: false,
         }
     }
 }

@@ -16,6 +16,45 @@ use libadwaita::{
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+/// Which sessions the history page shows.
+#[derive(Debug, Clone)]
+pub struct HistoryFilter {
+    /// Plan name to show, empty = all plans.
+    pub plan: String,
+    /// Period in days, 0 = all time.
+    pub days: i64,
+}
+
+impl Default for HistoryFilter {
+    fn default() -> Self {
+        Self {
+            plan: String::new(),
+            days: 0,
+        }
+    }
+}
+
+/// Apply a plan/period filter to a session list.
+pub fn apply_filter(sessions: &[TrainingSession], filter: &HistoryFilter) -> Vec<TrainingSession> {
+    let today = chrono::Local::now().date_naive();
+    sessions
+        .iter()
+        .filter(|s| {
+            if !filter.plan.is_empty() && s.plan_name != filter.plan {
+                return false;
+            }
+            if filter.days > 0 {
+                let age = (today - s.started_at.date_naive()).num_days();
+                if age > filter.days {
+                    return false;
+                }
+            }
+            true
+        })
+        .cloned()
+        .collect()
+}
+
 pub struct HistoryPage {
     widget: Bin,
     store: Rc<DataStore>,
@@ -25,6 +64,11 @@ pub struct HistoryPage {
     session_list_box: ListBox,
     chart: BarChart,
     chart_title: Label,
+    filter: RefCell<HistoryFilter>,
+    /// Guards against the filter combo notification loop.
+    updating_filters: Cell<bool>,
+    plan_filter_combo: libadwaita::ComboRow,
+    period_filter_combo: libadwaita::ComboRow,
     chart_mode: Cell<u8>, // 0 = 8 weeks, 1 = 12 months
     chart_metric: Cell<u8>, // 0 = minutes, 1 = volume (kg)
     stats_box: GtkBox,
@@ -58,6 +102,21 @@ impl HistoryPage {
         list_box.set_margin_bottom(24);
         list_box.set_margin_start(24);
         list_box.set_margin_end(24);
+
+        // Filter bar: plan + period
+        let filter_box = GtkBox::new(Orientation::Horizontal, 12);
+        filter_box.set_halign(Align::Start);
+        let plan_filter_combo = libadwaita::ComboRow::builder()
+            .title("Plan")
+            .subtitle("All plans")
+            .build();
+        filter_box.append(&plan_filter_combo);
+        let period_filter_combo = libadwaita::ComboRow::builder()
+            .title("Period")
+            .subtitle("All time")
+            .build();
+        filter_box.append(&period_filter_combo);
+        list_box.append(&filter_box);
 
         let io_box = GtkBox::new(Orientation::Horizontal, 6);
         io_box.set_halign(Align::End);
@@ -270,6 +329,10 @@ impl HistoryPage {
             session_list_box: session_list_box.clone(),
             chart,
             chart_title,
+            filter: RefCell::new(HistoryFilter::default()),
+            updating_filters: Cell::new(false),
+            plan_filter_combo: plan_filter_combo.clone(),
+            period_filter_combo: period_filter_combo.clone(),
             chart_mode: Cell::new(0),
             chart_metric: Cell::new(0),
             stats_box,
@@ -395,6 +458,48 @@ impl HistoryPage {
 
         {
             let page_weak = Rc::downgrade(&page);
+            page.plan_filter_combo.connect_selected_notify(move |combo| {
+                let Some(p) = page_weak.upgrade() else { return };
+                if p.updating_filters.get() {
+                    return;
+                }
+                let idx = combo.selected();
+                // ComboRow's selected index is the model index.
+                let plan = if idx == 0 {
+                    String::new()
+                } else {
+                    combo
+                        .model()
+                        .and_then(|m| {
+                            m.downcast_ref::<gtk4::StringList>()
+                                .and_then(|list| list.string(idx).map(|s| s.to_string()))
+                        })
+                        .unwrap_or_default()
+                };
+                p.filter.borrow_mut().plan = plan;
+                p.refresh();
+            });
+        }
+        {
+            let page_weak = Rc::downgrade(&page);
+            page.period_filter_combo.connect_selected_notify(move |combo| {
+                let Some(p) = page_weak.upgrade() else { return };
+                if p.updating_filters.get() {
+                    return;
+                }
+                let days = match combo.selected() {
+                    1 => 7,
+                    2 => 30,
+                    3 => 365,
+                    _ => 0,
+                };
+                p.filter.borrow_mut().days = days;
+                p.refresh();
+            });
+        }
+
+        {
+            let page_weak = Rc::downgrade(&page);
             progress_btn.connect_clicked(move |_| {
                 let Some(p) = page_weak.upgrade() else { return };
                 p.refresh_progress();
@@ -457,7 +562,9 @@ impl HistoryPage {
     }
 
     pub fn refresh(&self) {
-        let sessions = self.store.load_sessions();
+        let all_sessions = self.store.load_sessions();
+        self.populate_filter_combos(&all_sessions);
+        let sessions = self.filtered_sessions(&all_sessions);
         self.sessions.replace(sessions.clone());
         self.update_stats_chart(&sessions);
 
@@ -651,6 +758,49 @@ impl HistoryPage {
             card.append(&caption_label);
             self.stats_box.append(&card);
         }
+    }
+
+    /// Sessions that pass the current plan/period filter.
+    pub fn filtered_sessions(&self, sessions: &[TrainingSession]) -> Vec<TrainingSession> {
+        let filter = self.filter.borrow().clone();
+        apply_filter(sessions, &filter)
+    }
+
+    /// Fill the plan/period filter dropdowns from the available data.
+    fn populate_filter_combos(&self, sessions: &[TrainingSession]) {
+        self.updating_filters.set(true);
+        let mut names: Vec<String> = Vec::new();
+        for s in sessions {
+            if !names.contains(&s.plan_name) {
+                names.push(s.plan_name.clone());
+            }
+        }
+        names.sort();
+
+        let mut labels = vec!["All plans".to_string()];
+        labels.extend(names.iter().cloned());
+        let model = gtk4::StringList::new(
+            &labels.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+        );
+        let current = self.filter.borrow().plan.clone();
+        self.plan_filter_combo.set_model(Some(&model));
+        let idx = labels
+            .iter()
+            .position(|l| *l == current)
+            .unwrap_or(0);
+        self.plan_filter_combo.set_selected(idx as u32);
+
+        let period_model = gtk4::StringList::new(&["All time", "7 days", "30 days", "365 days"]);
+        self.period_filter_combo.set_model(Some(&period_model));
+        let days = self.filter.borrow().days;
+        let period_idx = match days {
+            7 => 1,
+            30 => 2,
+            365 => 3,
+            _ => 0,
+        };
+        self.period_filter_combo.set_selected(period_idx as u32);
+        self.updating_filters.set(false);
     }
 
     /// Rebuild the Progress page: volume chart, summary cards and the

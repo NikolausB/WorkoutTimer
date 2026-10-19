@@ -1,29 +1,50 @@
 use crate::controller_focus::ControllerFocusTracker;
 use crate::models::RoundConfig;
 use crate::progress_ring::{ProgressRing, COLOR_DONE, COLOR_GO, COLOR_NEUTRAL, COLOR_REST};
-use crate::settings::load_settings;
+use crate::settings::{load_settings, save_settings};
 use crate::sound::SoundPlayer;
 use crate::timer::TimerCore;
 use crate::ui_scaling::{apply_scaling, LabelType};
 use gtk4::prelude::*;
 use gtk4::{Align, Box as GtkBox, Button, Label, Orientation};
 use libadwaita::prelude::*;
-use libadwaita::{Bin, PreferencesGroup, SpinRow};
+use libadwaita::{Bin, PreferencesGroup, SpinRow, SwitchRow};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+
+/// Which phase the round timer is in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    Idle,
+    Prepare,
+    Warmup,
+    Round,
+    Rest,
+    Done,
+}
 
 struct TimerPreset {
     label: &'static str,
     rounds: i64,
     round_seconds: i64,
     pause_seconds: i64,
+    /// Custom per-round work/rest (overrides rounds/round_seconds).
+    per_round: Option<&'static [(i64, i64)]>,
 }
 
 const TIMER_PRESETS: &[TimerPreset] = &[
-    TimerPreset { label: "Boxing 3 × 3min", rounds: 3, round_seconds: 180, pause_seconds: 60 },
-    TimerPreset { label: "Tabata 8 × 20/10", rounds: 8, round_seconds: 20, pause_seconds: 10 },
-    TimerPreset { label: "HIIT 10 × 30/30", rounds: 10, round_seconds: 30, pause_seconds: 30 },
-    TimerPreset { label: "Endurance 5 × 5min", rounds: 5, round_seconds: 300, pause_seconds: 60 },
+    TimerPreset { label: "Boxing 3 × 3min", rounds: 3, round_seconds: 180, pause_seconds: 60, per_round: None },
+    TimerPreset { label: "Tabata 8 × 20/10", rounds: 8, round_seconds: 20, pause_seconds: 10, per_round: None },
+    TimerPreset { label: "HIIT 10 × 30/30", rounds: 10, round_seconds: 30, pause_seconds: 30, per_round: None },
+    TimerPreset { label: "Endurance 5 × 5min", rounds: 5, round_seconds: 300, pause_seconds: 60, per_round: None },
+    TimerPreset { label: "Pomodoro 25/5", rounds: 4, round_seconds: 1500, pause_seconds: 300, per_round: None },
+    TimerPreset {
+        label: "Pyramid 20/40/60",
+        rounds: 3,
+        round_seconds: 20,
+        pause_seconds: 10,
+        per_round: Some(&[(20, 10), (40, 10), (60, 0)]),
+    },
 ];
 
 pub struct RoundTimerPage {
@@ -36,9 +57,18 @@ pub struct RoundTimerPage {
     focus: Rc<RefCell<ControllerFocusTracker>>,
     sound: Rc<SoundPlayer>,
 
+    phase: Cell<Phase>,
+    completed_work_seconds: RefCell<i64>,
     rounds_spin: SpinRow,
     round_time_spin: SpinRow,
     pause_time_spin: SpinRow,
+    prep_spin: SpinRow,
+    warmup_switch: SwitchRow,
+    title_entry: libadwaita::EntryRow,
+    custom_switch: SwitchRow,
+    custom_rounds_box: GtkBox,
+    summary_label: Label,
+    per_round: RefCell<Vec<crate::models::RoundSpec>>,
     ring: ProgressRing,
     round_label: Label,
     phase_label: Label,
@@ -68,6 +98,32 @@ impl RoundTimerPage {
             Self::add_spin_row(&config_group, "Round duration (seconds)", 10.0, 3600.0, 180.0, 10.0);
         let pause_time_spin =
             Self::add_spin_row(&config_group, "Pause duration (seconds)", 0.0, 600.0, 60.0, 5.0);
+        let prep_spin =
+            Self::add_spin_row(&config_group, "Prepare countdown (seconds)", 0.0, 60.0, 0.0, 5.0);
+
+        let warmup_switch = SwitchRow::builder()
+            .title("Warm-up round")
+            .subtitle("One extra round at the pause length before round 1")
+            .build();
+        config_group.add(&warmup_switch);
+
+        let title_entry = libadwaita::EntryRow::builder()
+            .title("Activity")
+            .show_apply_button(false)
+            .build();
+        config_group.add(&title_entry);
+
+        // Custom rounds (ladder) editor
+        let custom_switch = SwitchRow::builder()
+            .title("Custom rounds")
+            .subtitle("Different work/rest time per round")
+            .build();
+        config_group.add(&custom_switch);
+        let custom_rounds_box = GtkBox::new(Orientation::Vertical, 6);
+        custom_rounds_box.set_margin_start(12);
+        custom_rounds_box.set_margin_end(12);
+        custom_rounds_box.set_margin_bottom(6);
+        config_group.add(&custom_rounds_box);
 
         main_box.append(&config_group);
 
@@ -96,6 +152,12 @@ impl RoundTimerPage {
         let phase_label = Label::new(Some(""));
         phase_label.set_css_classes(&["heading", "phase-reps"]);
         timer_group.add(&phase_label);
+
+        let summary_label = Label::new(None);
+        summary_label.add_css_class("dim-label");
+        summary_label.set_halign(Align::Center);
+        summary_label.set_visible(false);
+        timer_group.add(&summary_label);
 
         main_box.append(&timer_group);
 
@@ -150,18 +212,31 @@ impl RoundTimerPage {
         let is_pause = Rc::new(Cell::new(false));
         let total_rounds = Rc::new(Cell::new(0i64));
 
+
+        let saved_config = load_settings().timer_config;
+        let initial_config = saved_config.clone().unwrap_or_default();
+
         let page = Rc::new(Self {
             widget,
-            config: RefCell::new(RoundConfig::default()),
+            config: RefCell::new(initial_config.clone()),
             timer: Rc::clone(&timer),
             current_round: Rc::clone(&current_round),
             is_pause: Rc::clone(&is_pause),
             total_rounds: Rc::clone(&total_rounds),
             focus: Rc::new(RefCell::new(ControllerFocusTracker::new())),
             sound,
+            phase: Cell::new(Phase::Idle),
+            completed_work_seconds: RefCell::new(0),
             rounds_spin: rounds_spin.clone(),
             round_time_spin: round_time_spin.clone(),
             pause_time_spin: pause_time_spin.clone(),
+            prep_spin: prep_spin.clone(),
+            warmup_switch: warmup_switch.clone(),
+            title_entry: title_entry.clone(),
+            custom_switch: custom_switch.clone(),
+            custom_rounds_box: custom_rounds_box.clone(),
+            summary_label: summary_label.clone(),
+            per_round: RefCell::new(Vec::new()),
             ring,
             round_label: round_label.clone(),
             phase_label: phase_label.clone(),
@@ -178,13 +253,63 @@ impl RoundTimerPage {
             let page_weak = Rc::downgrade(&page);
             let (rounds, round_s, pause_s) =
                 (preset.rounds, preset.round_seconds, preset.pause_seconds);
+            let per_round: Option<Vec<crate::models::RoundSpec>> = preset.per_round.map(|list| {
+                list.iter()
+                    .map(|(work, rest)| crate::models::RoundSpec {
+                        work_seconds: *work,
+                        rest_seconds: *rest,
+                    })
+                    .collect()
+            });
             btn.connect_clicked(move |_| {
                 if let Some(p) = page_weak.upgrade() {
                     if p.rounds_spin.is_sensitive() {
                         p.rounds_spin.set_value(rounds as f64);
                         p.round_time_spin.set_value(round_s as f64);
                         p.pause_time_spin.set_value(pause_s as f64);
+                        match &per_round {
+                            Some(specs) => {
+                                *p.per_round.borrow_mut() = specs.clone();
+                                p.custom_switch.set_active(true);
+                            }
+                            None => {
+                                p.custom_switch.set_active(false);
+                            }
+                        }
+                        p.rebuild_custom_rounds();
+                        p.sync_config_from_widgets();
                     }
+                }
+            });
+        }
+
+        // Apply the restored configuration to the widgets.
+        {
+            let page_weak = Rc::downgrade(&page);
+            let config = initial_config.clone();
+            gtk4::glib::idle_add_local_once(move || {
+                if let Some(p) = page_weak.upgrade() {
+                    p.apply_config_to_widgets(&config);
+                    p.custom_rounds_box.set_visible(p.custom_switch.is_active());
+                }
+            });
+        }
+
+        {
+            let page_weak = Rc::downgrade(&page);
+            page.custom_switch.connect_active_notify(move |_| {
+                if let Some(p) = page_weak.upgrade() {
+                    let active = p.custom_switch.is_active();
+                    p.custom_rounds_box.set_visible(active);
+                    p.rounds_spin.set_sensitive(!active);
+                    p.round_time_spin.set_sensitive(!active);
+                    if active && p.per_round.borrow().is_empty() {
+                        p.per_round.borrow_mut().push(crate::models::RoundSpec {
+                            work_seconds: p.round_time_spin.value() as i64,
+                            rest_seconds: p.pause_time_spin.value() as i64,
+                        });
+                    }
+                    p.rebuild_custom_rounds();
                 }
             });
         }
@@ -282,19 +407,192 @@ impl RoundTimerPage {
         row
     }
 
+    /// Rebuild the custom-rounds editor rows.
+    fn rebuild_custom_rounds(self: &Rc<Self>) {
+        let mut child = self.custom_rounds_box.first_child();
+        while let Some(c) = child {
+            child = c.next_sibling();
+            self.custom_rounds_box.remove(&c);
+        }
+
+        let specs = self.per_round.borrow().clone();
+        for (idx, spec) in specs.iter().enumerate() {
+            let row = GtkBox::new(Orientation::Horizontal, 6);
+
+            let work_adj = gtk4::Adjustment::new(
+                spec.work_seconds as f64,
+                5.0,
+                3600.0,
+                5.0,
+                60.0,
+                0.0,
+            );
+            let work_spin = SpinRow::new(Some(&work_adj), 1.0, 0);
+            work_spin.set_title(&format!("Round {}", idx + 1));
+            work_spin.set_subtitle("work");
+            {
+                let page_weak = Rc::downgrade(self);
+                let spin = work_spin.clone();
+                work_adj.connect_value_changed(move |_| {
+                    if let Some(p) = page_weak.upgrade() {
+                        let value = spin.value() as i64;
+                        let mut specs = p.per_round.borrow_mut();
+                        if idx < specs.len() {
+                            specs[idx].work_seconds = value;
+                        }
+                    }
+                });
+            }
+            row.append(&work_spin);
+
+            let rest_adj = gtk4::Adjustment::new(
+                spec.rest_seconds as f64,
+                0.0,
+                600.0,
+                5.0,
+                30.0,
+                0.0,
+            );
+            let rest_spin = SpinRow::new(Some(&rest_adj), 1.0, 0);
+            rest_spin.set_title("rest");
+            {
+                let page_weak = Rc::downgrade(self);
+                let spin = rest_spin.clone();
+                rest_adj.connect_value_changed(move |_| {
+                    if let Some(p) = page_weak.upgrade() {
+                        let value = spin.value() as i64;
+                        let mut specs = p.per_round.borrow_mut();
+                        if idx < specs.len() {
+                            specs[idx].rest_seconds = value;
+                        }
+                    }
+                });
+            }
+            row.append(&rest_spin);
+
+            let remove_btn = Button::builder()
+                .icon_name("list-remove-symbolic")
+                .css_classes(["flat"])
+                .valign(Align::Center)
+                .tooltip_text("Remove round")
+                .build();
+            {
+                let page_weak = Rc::downgrade(self);
+                remove_btn.connect_clicked(move |_| {
+                    if let Some(p) = page_weak.upgrade() {
+                        let mut specs = p.per_round.borrow_mut();
+                        if idx < specs.len() {
+                            specs.remove(idx);
+                        }
+                        drop(specs);
+                        p.rebuild_custom_rounds();
+                    }
+                });
+            }
+            row.append(&remove_btn);
+
+            self.custom_rounds_box.append(&row);
+        }
+
+        // Add button
+        let add_btn = Button::builder()
+            .label("Add round")
+            .css_classes(["flat"])
+            .halign(Align::Start)
+            .build();
+        {
+            let page_weak = Rc::downgrade(self);
+            add_btn.connect_clicked(move |_| {
+                if let Some(p) = page_weak.upgrade() {
+                    p.per_round.borrow_mut().push(crate::models::RoundSpec {
+                        work_seconds: 30,
+                        rest_seconds: 15,
+                    });
+                    p.rebuild_custom_rounds();
+                }
+            });
+        }
+        self.custom_rounds_box.append(&add_btn);
+    }
+
+    /// Read the current widget state into the config and persist it.
+    fn sync_config_from_widgets(&self) {
+        let mut config = self.config.borrow_mut();
+        config.rounds = self.rounds_spin.value() as i64;
+        config.round_seconds = self.round_time_spin.value() as i64;
+        config.pause_seconds = self.pause_time_spin.value() as i64;
+        config.prep_seconds = self.prep_spin.value() as i64;
+        config.warmup = self.warmup_switch.is_active();
+        config.title = self.title_entry.text().trim().to_string();
+        config.per_round = if self.custom_switch.is_active() {
+            let specs = self.per_round.borrow().clone();
+            if specs.is_empty() {
+                None
+            } else {
+                Some(specs)
+            }
+        } else {
+            None
+        };
+        drop(config);
+
+        let mut settings = load_settings();
+        settings.timer_config = Some(self.config.borrow().clone());
+        save_settings(&settings);
+    }
+
+    /// Apply a config to the widgets.
+    fn apply_config_to_widgets(self: &Rc<Self>, config: &RoundConfig) {
+        self.rounds_spin.set_value(config.rounds as f64);
+        self.round_time_spin.set_value(config.round_seconds as f64);
+        self.pause_time_spin.set_value(config.pause_seconds as f64);
+        self.prep_spin.set_value(config.prep_seconds as f64);
+        self.warmup_switch.set_active(config.warmup);
+        self.title_entry.set_text(&config.title);
+        if let Some(specs) = &config.per_round {
+            *self.per_round.borrow_mut() = specs.clone();
+            self.custom_switch.set_active(true);
+        } else {
+            self.custom_switch.set_active(false);
+        }
+        self.rebuild_custom_rounds();
+    }
+
     fn on_start_clicked(&self) {
         if self.timer.is_running.get() {
             return;
         }
 
         if self.current_round.get() == 0 {
-            self.config.borrow_mut().rounds = self.rounds_spin.value() as i64;
-            self.config.borrow_mut().round_seconds = self.round_time_spin.value() as i64;
-            self.config.borrow_mut().pause_seconds = self.pause_time_spin.value() as i64;
-            self.total_rounds.set(self.config.borrow().rounds);
+            self.sync_config_from_widgets();
+            let config = self.config.borrow().clone();
+
+            // Custom rounds define their own length.
+            let total = match &config.per_round {
+                Some(specs) => specs.len().max(1) as i64,
+                None => config.rounds.max(1),
+            };
+            self.total_rounds.set(total);
             self.current_round.set(1);
             self.is_pause.set(false);
-            self.start_round();
+            self.summary_label.set_visible(false);
+            self.update_round_label();
+
+            // Prepare countdown, then warm-up, then the real rounds.
+            if config.prep_seconds > 0 {
+                self.phase.set(Phase::Prepare);
+                self.set_phase_display("PREPARE", "phase-reps", COLOR_REST);
+                self.round_label.set_label("Get ready");
+                self.timer.start(config.prep_seconds);
+            } else if config.warmup {
+                self.phase.set(Phase::Warmup);
+                self.set_phase_display("WARM-UP", "phase-rest", COLOR_REST);
+                self.round_label.set_label("Warm-up");
+                self.timer.start(config.pause_seconds.max(10));
+            } else {
+                self.phase.set(Phase::Round);
+                self.start_round();
+            }
         } else {
             self.timer.resume();
         }
@@ -302,26 +600,65 @@ impl RoundTimerPage {
         self.update_buttons_running(true);
     }
 
+    fn update_round_label(&self) {
+        let config = self.config.borrow();
+        if config.per_round.is_some() {
+            self.round_label.set_label(&format!(
+                "Round {} / {}",
+                self.current_round.get(),
+                self.total_rounds.get()
+            ));
+        } else {
+            self.round_label.set_label(&format!(
+                "Round {} / {}",
+                self.current_round.get(),
+                self.total_rounds.get()
+            ));
+        }
+    }
+
+    /// Work seconds of the current round (custom rounds win).
+    fn current_work_seconds(&self) -> i64 {
+        let config = self.config.borrow();
+        if let Some(specs) = &config.per_round {
+            let idx = (self.current_round.get() - 1).max(0) as usize;
+            if let Some(spec) = specs.get(idx) {
+                return spec.work_seconds;
+            }
+        }
+        config.round_seconds
+    }
+
+    /// Rest seconds after the current round (custom rounds win).
+    fn current_rest_seconds(&self) -> i64 {
+        let config = self.config.borrow();
+        if let Some(specs) = &config.per_round {
+            let idx = (self.current_round.get() - 1).max(0) as usize;
+            if let Some(spec) = specs.get(idx) {
+                return spec.rest_seconds;
+            }
+        }
+        config.pause_seconds
+    }
+
     fn start_round(&self) {
-        self.round_label.set_label(&format!(
-            "Round {} / {}",
-            self.current_round.get(),
-            self.total_rounds.get()
-        ));
+        self.phase.set(Phase::Round);
+        self.update_round_label();
         self.set_phase_display("FIGHT", "phase-go", COLOR_GO);
         let settings = load_settings();
         self.sound
             .play_sound(settings.get_sound("round_start_sound").as_deref());
-        self.timer.start(self.config.borrow().round_seconds);
+        self.timer.start(self.current_work_seconds());
     }
 
     fn start_pause(&self) {
         self.set_phase_display("PAUSE", "phase-rest", COLOR_REST);
-        if self.config.borrow().pause_seconds > 0 {
+        let rest = self.current_rest_seconds();
+        if rest > 0 {
             let settings = load_settings();
             self.sound
                 .play_sound(settings.get_sound("round_end_sound").as_deref());
-            self.timer.start(self.config.borrow().pause_seconds);
+            self.timer.start(rest);
         } else {
             self.advance_round();
         }
@@ -340,25 +677,70 @@ impl RoundTimerPage {
         let settings = load_settings();
         self.sound
             .play_sound(settings.get_sound("countdown_tick_sound").as_deref());
-        if self.is_pause.get() {
-            self.is_pause.set(false);
-            self.advance_round();
-        } else {
-            if self.current_round.get() >= self.total_rounds.get() {
-                self.on_training_complete();
-            } else if self.config.borrow().pause_seconds > 0 {
-                self.is_pause.set(true);
-                self.start_pause();
-            } else {
+
+        match self.phase.get() {
+            Phase::Prepare => {
+                // Prepare is over: warm-up (if enabled) or the first round.
+                if self.config.borrow().warmup {
+                    self.phase.set(Phase::Warmup);
+                    self.set_phase_display("WARM-UP", "phase-rest", COLOR_REST);
+                    self.round_label.set_label("Warm-up");
+                    self.timer.start(self.config.borrow().pause_seconds.max(10));
+                } else {
+                    self.phase.set(Phase::Round);
+                    self.start_round();
+                }
+            }
+            Phase::Warmup => {
+                self.phase.set(Phase::Round);
+                self.start_round();
+            }
+            Phase::Rest => {
+                self.is_pause.set(false);
+                self.phase.set(Phase::Round);
                 self.advance_round();
+            }
+            _ => {
+                *self.completed_work_seconds.borrow_mut() += self.current_work_seconds();
+                if self.current_round.get() >= self.total_rounds.get() {
+                    self.on_training_complete();
+                } else if self.current_rest_seconds() > 0 {
+                    self.is_pause.set(true);
+                    self.phase.set(Phase::Rest);
+                    self.start_pause();
+                } else {
+                    self.phase.set(Phase::Round);
+                    self.advance_round();
+                }
             }
         }
     }
 
     fn on_training_complete(&self) {
+        self.phase.set(Phase::Done);
         self.set_phase_display("COMPLETE!", "phase-done", COLOR_DONE);
         self.ring.set_progress(1.0);
         self.countdown_label.set_label("00:00");
+
+        // Summary: rounds completed and total work time.
+        let rounds = self.total_rounds.get();
+        let work_secs: i64 = self.completed_work_seconds.borrow().clone();
+        let title = {
+            let config = self.config.borrow();
+            if config.title.is_empty() {
+                String::new()
+            } else {
+                format!("{} · ", config.title)
+            }
+        };
+        self.summary_label.set_label(&format!(
+            "{}{} rounds · {} min work",
+            title,
+            rounds,
+            work_secs / 60
+        ));
+        self.summary_label.set_visible(true);
+
         self.current_round.set(0);
         self.update_buttons_running(false);
         let settings = load_settings();
@@ -404,11 +786,14 @@ impl RoundTimerPage {
         self.timer.stop();
         self.current_round.set(0);
         self.is_pause.set(false);
+        self.phase.set(Phase::Idle);
+        *self.completed_work_seconds.borrow_mut() = 0;
         self.countdown_label.set_label("00:00");
         self.round_label.set_label("Round 0 / 0");
         self.set_phase_display("", "phase-reps", COLOR_NEUTRAL);
         self.ring.set_progress(1.0);
         self.ring.set_dimmed(false);
+        self.summary_label.set_visible(false);
         self.update_buttons_running(false);
     }
 
@@ -417,18 +802,33 @@ impl RoundTimerPage {
         let settings = load_settings();
         self.sound
             .play_sound(settings.get_sound("countdown_tick_sound").as_deref());
-        if self.is_pause.get() {
-            self.is_pause.set(false);
-            self.advance_round();
-        } else {
-            if self.current_round.get() >= self.total_rounds.get() {
-                self.on_training_complete();
-            } else if self.config.borrow().pause_seconds > 0 {
-                self.is_pause.set(true);
-                self.start_pause();
-            } else {
-                self.advance_round();
+
+        // Skipping during prepare/warm-up jumps straight into round 1.
+        match self.phase.get() {
+            Phase::Prepare | Phase::Warmup => {
+                self.phase.set(Phase::Round);
+                self.start_round();
+                return;
             }
+            Phase::Rest => {
+                self.is_pause.set(false);
+                self.phase.set(Phase::Round);
+                self.advance_round();
+                return;
+            }
+            _ => {}
+        }
+
+        *self.completed_work_seconds.borrow_mut() += self.current_work_seconds();
+        if self.current_round.get() >= self.total_rounds.get() {
+            self.on_training_complete();
+        } else if self.current_rest_seconds() > 0 {
+            self.is_pause.set(true);
+            self.phase.set(Phase::Rest);
+            self.start_pause();
+        } else {
+            self.phase.set(Phase::Round);
+            self.advance_round();
         }
     }
 
@@ -450,6 +850,10 @@ impl RoundTimerPage {
             &self.rounds_spin.clone().upcast::<gtk4::Widget>(),
             &self.round_time_spin.clone().upcast::<gtk4::Widget>(),
             &self.pause_time_spin.clone().upcast::<gtk4::Widget>(),
+            &self.prep_spin.clone().upcast::<gtk4::Widget>(),
+            &self.warmup_switch.clone().upcast::<gtk4::Widget>(),
+            &self.title_entry.clone().upcast::<gtk4::Widget>(),
+            &self.custom_switch.clone().upcast::<gtk4::Widget>(),
         ] {
             if w.is_sensitive() {
                 widgets.push(w.clone());

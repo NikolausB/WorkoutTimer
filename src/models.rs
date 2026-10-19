@@ -48,6 +48,15 @@ fn parse_iso_datetime(s: &str) -> Option<DateTime<Local>> {
         .or_else(|| naive_parse("%Y-%m-%dT%H:%M:%S"))
 }
 
+/// One round of a custom interval list.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoundSpec {
+    #[serde(default = "default_round_seconds")]
+    pub work_seconds: i64,
+    #[serde(default)]
+    pub rest_seconds: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoundConfig {
     #[serde(default = "default_rounds")]
@@ -56,6 +65,18 @@ pub struct RoundConfig {
     pub round_seconds: i64,
     #[serde(default = "default_pause_seconds")]
     pub pause_seconds: i64,
+    /// Countdown before the first round (0 = off).
+    #[serde(default)]
+    pub prep_seconds: i64,
+    /// One extra warm-up round at the pause length.
+    #[serde(default)]
+    pub warmup: bool,
+    /// Custom per-round work/rest; when set it overrides rounds/round_seconds.
+    #[serde(default)]
+    pub per_round: Option<Vec<RoundSpec>>,
+    /// Free-text title, e.g. "Chores" or "Stretching".
+    #[serde(default)]
+    pub title: String,
 }
 
 fn default_rounds() -> i64 {
@@ -74,6 +95,10 @@ impl Default for RoundConfig {
             rounds: 10,
             round_seconds: 180,
             pause_seconds: 60,
+            prep_seconds: 0,
+            warmup: false,
+            per_round: None,
+            title: String::new(),
         }
     }
 }

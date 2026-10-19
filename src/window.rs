@@ -86,6 +86,7 @@ pub struct MainWindow {
     hints_overlay: Rc<RefCell<ControllerHintsOverlay>>,
     toast_overlay: libadwaita::ToastOverlay,
     help_window: RefCell<Option<Rc<crate::help_page::HelpWindow>>>,
+    onboarding_window: RefCell<Option<Rc<crate::onboarding::OnboardingWindow>>>,
     self_weak: RefCell<Weak<MainWindow>>,
 }
 
@@ -185,6 +186,7 @@ impl MainWindow {
             hints_overlay,
             toast_overlay,
             help_window: RefCell::new(None),
+            onboarding_window: RefCell::new(None),
             self_weak: RefCell::new(Weak::new()),
         });
         *mw.self_weak.borrow_mut() = Rc::downgrade(&mw);
@@ -653,6 +655,21 @@ impl MainWindow {
                 gtk4::STYLE_PROVIDER_PRIORITY_USER,
             );
         }
+    }
+
+    /// Show the first-run onboarding wizard (once per installation).
+    pub fn open_onboarding(self: &Rc<Self>) {
+        let mut slot = self.onboarding_window.borrow_mut();
+        if slot.is_some() {
+            return;
+        }
+        let store = Rc::new(DataStore::new());
+        let win = Rc::new(crate::onboarding::OnboardingWindow::new(
+            &self.window,
+            store,
+        ));
+        *slot = Some(Rc::clone(&win));
+        win.present();
     }
 
     /// Open the "Help & Shortcuts" window (only one at a time).
