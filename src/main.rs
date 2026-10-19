@@ -8,6 +8,7 @@ mod csv_io;
 mod data_store;
 mod dialogs;
 mod exercise_picker;
+mod help_page;
 mod history;
 mod home;
 mod image_utils;
@@ -183,6 +184,22 @@ mod ui_tests {
             assert_eq!(found_size, Some(60), "timer label font size wrong: {:?}", found_size);
         }
 
+        // Help page: the controller hint strings are the single source of
+        // truth for both the hint bar and the help page.
+        {
+            use crate::controller_hints::{hints_for, HINT_CONTEXTS, KEYBOARD_SHORTCUTS};
+            assert!(!KEYBOARD_SHORTCUTS.is_empty());
+            for (context, _title) in HINT_CONTEXTS {
+                assert!(
+                    !hints_for(context, "").is_empty(),
+                    "no hints for context {}",
+                    context
+                );
+            }
+            assert!(!hints_for("runner_exercise", "rest").is_empty());
+            assert!(hints_for("does-not-exist", "").is_empty());
+        }
+
         // AdwAlertDialog: closing programmatically must emit ::response with
         // the close response — the controller confirm path relies on it.
         {
@@ -206,6 +223,17 @@ mod ui_tests {
                 Some("cancel"),
                 "close() did not emit ::response with close_response"
             );
+        }
+
+        // Starter templates ship with the app and must be loadable.
+        {
+            let templates = crate::image_utils::load_default_plans();
+            assert!(
+                templates.len() >= 5,
+                "expected the bundled starter plans, got {}",
+                templates.len()
+            );
+            assert!(templates.iter().all(|p| !p.exercises.is_empty()));
         }
     }
 

@@ -68,6 +68,8 @@ pub struct TrainingPlanPage {
     new_plan_btn: Button,
     export_btn: Button,
     import_btn: Button,
+    empty_new_btn: Button,
+    empty_templates_btn: Button,
     star_buttons: RefCell<HashMap<String, gtk4::Widget>>,
 
     // Editor page widgets
@@ -170,10 +172,30 @@ impl TrainingPlanPage {
         scrolled.set_child(Some(&plan_list_box));
         list_stack.add_named(&scrolled, Some("list"));
 
-        let empty_label = Label::new(Some("No plans yet. Create one!"));
-        empty_label.add_css_class("dim-label");
-        empty_label.set_vexpand(true);
-        list_stack.add_named(&empty_label, Some("empty"));
+        // Empty state: instead of a plain label, offer the two ways to start.
+        let empty_box = GtkBox::new(Orientation::Vertical, 12);
+        empty_box.set_vexpand(true);
+        empty_box.set_valign(Align::Center);
+        empty_box.set_halign(Align::Center);
+        let empty_label = Label::new(Some("No plans yet"));
+        empty_label.add_css_class("title-3");
+        empty_box.append(&empty_label);
+        let empty_hint = Label::new(Some(
+            "Create a plan from scratch, or start from one of the templates.",
+        ));
+        empty_hint.add_css_class("dim-label");
+        empty_box.append(&empty_hint);
+        let empty_buttons = GtkBox::new(Orientation::Horizontal, 12);
+        empty_buttons.set_halign(Align::Center);
+        let empty_new_btn = Button::builder()
+            .label("New Plan")
+            .css_classes(["suggested-action"])
+            .build();
+        let empty_templates_btn = Button::builder().label("Browse Templates").build();
+        empty_buttons.append(&empty_new_btn);
+        empty_buttons.append(&empty_templates_btn);
+        empty_box.append(&empty_buttons);
+        list_stack.add_named(&empty_box, Some("empty"));
 
         list_box.append(&list_stack);
 
@@ -449,6 +471,8 @@ impl TrainingPlanPage {
             new_plan_btn: new_plan_btn.clone(),
             export_btn: export_btn.clone(),
             import_btn: import_btn.clone(),
+            empty_new_btn: empty_new_btn.clone(),
+            empty_templates_btn: empty_templates_btn.clone(),
             star_buttons: RefCell::new(HashMap::new()),
             editor_page: editor_page.clone(),
             plan_name_entry: plan_name_entry.clone(),
@@ -615,6 +639,24 @@ impl TrainingPlanPage {
             self.new_plan_btn.connect_clicked(move |_| {
                 if let Some(p) = page_weak.upgrade() {
                     p.show_editor(None);
+                }
+            });
+        }
+
+        // Empty state buttons
+        {
+            let page_weak = page_weak.clone();
+            self.empty_new_btn.connect_clicked(move |_| {
+                if let Some(p) = page_weak.upgrade() {
+                    p.show_editor(None);
+                }
+            });
+        }
+        {
+            let page_weak = page_weak.clone();
+            self.empty_templates_btn.connect_clicked(move |_| {
+                if let Some(p) = page_weak.upgrade() {
+                    p.show_template_picker();
                 }
             });
         }
@@ -1279,35 +1321,102 @@ impl TrainingPlanPage {
         }
     }
 
+    /// Delete the plan being edited. The deletion happens immediately and can
+    /// be undone from the toast (no confirmation dialog needed).
     fn on_confirm_delete_plan(&self) {
-        if self.editing_plan_id.borrow().is_none() {
+        let plan_id = self.editing_plan_id.borrow().clone();
+        let Some(plan_id) = plan_id else { return };
+        let Some(plan) = self.store.get_plan(&plan_id) else { return };
+
+        self.store.delete_plan(&plan_id);
+        *self.editing_plan_id.borrow_mut() = None;
+        self.show_list();
+
+        let store = Rc::clone(&self.store);
+        crate::window::show_app_toast_action(
+            &format!("\"{}\" deleted", plan.name),
+            "Undo",
+            Rc::new(move || {
+                store.save_plan(&plan);
+                crate::window::refresh_all_pages();
+            }),
+        );
+    }
+
+    /// Show the bundled starter plans; picking one adds it to the user's plans.
+    fn show_template_picker(&self) {
+        let templates = crate::image_utils::load_default_plans();
+        if templates.is_empty() {
+            crate::window::show_app_toast("No templates available");
             return;
         }
-        let dialog = Rc::new(
-            AlertDialog::builder()
-                .heading("Delete Plan?")
-                .body("This action cannot be undone.")
-                .build(),
-        );
-        dialog.add_response("cancel", "Cancel");
-        dialog.add_response("delete", "Delete");
-        dialog.set_response_appearance("delete", libadwaita::ResponseAppearance::Destructive);
-        dialog.set_default_response(Some("cancel"));
 
-        let page_rc = self.self_weak_holder();
-        dialog.connect_response(None, move |_dlg, response| {
-            if response == "delete" {
-                if let Some(p) = page_rc.upgrade() {
-                    if let Some(plan_id) = p.editing_plan_id.borrow().clone() {
-                        p.store.delete_plan(&plan_id);
-                    }
-                    *p.editing_plan_id.borrow_mut() = None;
-                    p.show_list();
-                }
+        let window = libadwaita::Window::builder()
+            .title("Plan Templates")
+            .modal(true)
+            .default_width(520)
+            .default_height(560)
+            .build();
+
+        let header = libadwaita::HeaderBar::new();
+        let cancel_btn = gtk4::Button::builder()
+            .label("Cancel")
+            .css_classes(["flat"])
+            .build();
+        header.pack_start(&cancel_btn);
+
+        let list_box = gtk4::ListBox::new();
+        list_box.add_css_class("boxed-list");
+        list_box.set_selection_mode(gtk4::SelectionMode::None);
+
+        for template in templates {
+            let row = ActionRow::builder()
+                .title(&template.name)
+                .subtitle(format!(
+                    "{} exercises · {} rounds",
+                    template.exercises.len(),
+                    template.total_rounds.max(1)
+                ))
+                .activatable(true)
+                .build();
+            let store = Rc::clone(&self.store);
+            let plan = template.clone();
+            let window_clone = window.clone();
+            row.connect_activated(move |_| {
+                let mut new_plan = plan.clone();
+                new_plan.id = uuid::Uuid::new_v4().to_string();
+                new_plan.created = chrono::Local::now();
+                new_plan.is_favorite = false;
+                store.save_plan(&new_plan);
+                window_clone.close();
+                crate::window::refresh_all_pages();
+                crate::window::show_app_toast(&format!("Added \"{}\"", new_plan.name));
+            });
+            list_box.append(&row);
+        }
+
+        let scrolled = gtk4::ScrolledWindow::new();
+        scrolled.set_child(Some(&list_box));
+        scrolled.set_vexpand(true);
+
+        let toolbar = libadwaita::ToolbarView::new();
+        toolbar.add_top_bar(&header);
+        toolbar.set_content(Some(&scrolled));
+        window.set_content(Some(&toolbar));
+
+        {
+            let window_clone = window.clone();
+            cancel_btn.connect_clicked(move |_| {
+                window_clone.close();
+            });
+        }
+
+        if let Some(root) = self.widget.root() {
+            if let Some(parent) = root.dynamic_cast_ref::<gtk4::Window>() {
+                window.set_transient_for(Some(parent));
             }
-        });
-        self.track_dialog(&dialog, "delete");
-        self.present_dialog(&dialog);
+        }
+        window.present();
     }
 
     fn self_weak_holder(&self) -> std::rc::Weak<TrainingPlanPage> {

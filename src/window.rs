@@ -43,6 +43,20 @@ pub fn show_app_toast(title: &str) {
         mw.show_toast(title);
     }
 }
+
+/// Show a toast with an action button (used for "Undo") from anywhere.
+pub fn show_app_toast_action(title: &str, action: &str, cb: Rc<dyn Fn()>) {
+    if let Some(mw) = current_window() {
+        mw.show_toast_action(title, action, cb);
+    }
+}
+
+/// Re-read the data files and refresh every page (used after undo/restore).
+pub fn refresh_all_pages() {
+    if let Some(mw) = current_window() {
+        mw.refresh_all_pages();
+    }
+}
 enum OpenDialog {
     Preferences(Rc<PreferencesDialog>),
     ExercisePicker(Rc<crate::exercise_picker::ExercisePicker>),
@@ -71,6 +85,7 @@ pub struct MainWindow {
     history_tab: adw::ViewStackPage,
     hints_overlay: Rc<RefCell<ControllerHintsOverlay>>,
     toast_overlay: libadwaita::ToastOverlay,
+    help_window: RefCell<Option<Rc<crate::help_page::HelpWindow>>>,
     self_weak: RefCell<Weak<MainWindow>>,
 }
 
@@ -125,9 +140,16 @@ impl MainWindow {
             .tooltip_text("Preferences")
             .build();
 
+        let help_btn = gtk4::Button::builder()
+            .icon_name("help-about-symbolic")
+            .css_classes(["flat"])
+            .tooltip_text("Help & Shortcuts")
+            .build();
+
         let header = HeaderBar::new();
         header.set_title_widget(Some(&switcher));
         header.pack_end(&prefs_btn);
+        header.pack_end(&help_btn);
 
         let toolbar = ToolbarView::new();
         toolbar.add_top_bar(&header);
@@ -162,6 +184,7 @@ impl MainWindow {
             history_tab,
             hints_overlay,
             toast_overlay,
+            help_window: RefCell::new(None),
             self_weak: RefCell::new(Weak::new()),
         });
         *mw.self_weak.borrow_mut() = Rc::downgrade(&mw);
@@ -179,6 +202,16 @@ impl MainWindow {
             });
         }
 
+        // Help button
+        {
+            let mw_weak = Rc::downgrade(&mw);
+            help_btn.connect_clicked(move |_| {
+                if let Some(m) = mw_weak.upgrade() {
+                    m.open_help();
+                }
+            });
+        }
+
         // Home page: open plan goes to plans tab; browse button switches tab
         {
             let mw_weak_2 = Rc::downgrade(&mw);
@@ -192,6 +225,24 @@ impl MainWindow {
             mw.home.set_on_switch_to_plans(Rc::new(move || {
                 if let Some(m) = mw_weak.upgrade() {
                     m.stack.set_visible_child_name("plans");
+                }
+            }));
+            let mw_weak = Rc::downgrade(&mw);
+            mw.home.set_on_switch_to_timer(Rc::new(move || {
+                if let Some(m) = mw_weak.upgrade() {
+                    m.stack.set_visible_child_name("timer");
+                }
+            }));
+            let mw_weak = Rc::downgrade(&mw);
+            mw.home.set_on_open_help(Rc::new(move || {
+                if let Some(m) = mw_weak.upgrade() {
+                    m.open_help();
+                }
+            }));
+            let mw_weak = Rc::downgrade(&mw);
+            mw.history.set_on_switch_to_timer(Rc::new(move || {
+                if let Some(m) = mw_weak.upgrade() {
+                    m.stack.set_visible_child_name("timer");
                 }
             }));
         }
@@ -238,6 +289,14 @@ impl MainWindow {
                 let on_runner = m.visible_tab() == "plans"
                     && m.training_plan.visible_page() == "runner";
                 match key {
+                    gtk4::gdk::Key::question => {
+                        m.open_help();
+                        Propagation::Stop
+                    }
+                    gtk4::gdk::Key::comma if _state.contains(gtk4::gdk::ModifierType::CONTROL_MASK) => {
+                        m.on_preferences_clicked();
+                        Propagation::Stop
+                    }
                     gtk4::gdk::Key::space if on_timer || on_runner => {
                         if on_timer {
                             m.round_timer.controller_start();
@@ -397,6 +456,18 @@ impl MainWindow {
 
     pub fn show_toast(&self, title: &str) {
         let toast = libadwaita::Toast::builder().title(title).timeout(3).build();
+        self.toast_overlay.add_toast(toast);
+    }
+
+    /// Toast with an action button (e.g. "Undo"). The callback runs when the
+    /// user activates the button.
+    pub fn show_toast_action(&self, title: &str, action: &str, cb: Rc<dyn Fn()>) {
+        let toast = libadwaita::Toast::builder()
+            .title(title)
+            .button_label(action)
+            .timeout(6)
+            .build();
+        toast.connect_button_clicked(move |_| cb());
         self.toast_overlay.add_toast(toast);
     }
 
@@ -584,6 +655,18 @@ impl MainWindow {
         }
     }
 
+    /// Open the "Help & Shortcuts" window (only one at a time).
+    pub fn open_help(self: &Rc<Self>) {
+        let mut slot = self.help_window.borrow_mut();
+        if let Some(existing) = slot.as_ref() {
+            existing.present();
+            return;
+        }
+        let win = Rc::new(crate::help_page::HelpWindow::new(&self.window));
+        *slot = Some(Rc::clone(&win));
+        win.present();
+    }
+
     fn on_controller_connected(&self) {
         self.update_hints_visibility();
     }
@@ -641,6 +724,16 @@ impl MainWindow {
         }
         if !settings.gamepad_enabled {
             return;
+        }
+
+        // The help window is modal-ish: B closes it, everything else is ignored.
+        if let Some(help) = self.help_window.borrow().as_ref() {
+            if help.is_open() {
+                if action == "b" || action == "back" {
+                    help.close();
+                }
+                return;
+            }
         }
 
         match action {

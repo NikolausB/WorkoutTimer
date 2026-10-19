@@ -15,6 +15,8 @@ pub struct HomePage {
     store: Rc<DataStore>,
     on_open_plan: RefCell<Rc<dyn Fn(&TrainingPlan)>>,
     on_switch_to_plans: Rc<RefCell<Option<Rc<dyn Fn()>>>>,
+    on_switch_to_timer: RefCell<Option<Rc<dyn Fn()>>>,
+    on_open_help: RefCell<Option<Rc<dyn Fn()>>>,
     focus: Rc<RefCell<ControllerFocusTracker>>,
     stats_box: GtkBox,
     recent_card: PreferencesGroup,
@@ -22,6 +24,10 @@ pub struct HomePage {
     recent_row: Rc<RefCell<Option<ActionRow>>>,
     recommended_row: Rc<RefCell<Option<ActionRow>>>,
     browse_btn: Button,
+    get_started_card: PreferencesGroup,
+    help_row: ActionRow,
+    create_plan_row: ActionRow,
+    timer_row: ActionRow,
 }
 
 impl HomePage {
@@ -54,6 +60,32 @@ impl HomePage {
         let recommended_card = PreferencesGroup::builder().title("Recommended").build();
         box_widget.append(&recommended_card);
 
+        // First-run "Get Started" card (hidden once the user has sessions)
+        let get_started_card = PreferencesGroup::builder().title("Get Started").build();
+        let create_plan_row = ActionRow::builder()
+            .title("Create your first plan")
+            .subtitle("Start from a template or build your own")
+            .activatable(true)
+            .build();
+        get_started_card.add(&create_plan_row);
+        let timer_row = ActionRow::builder()
+            .title("Start a round timer")
+            .subtitle("Boxing rounds, Tabata, HIIT and custom intervals")
+            .activatable(true)
+            .build();
+        get_started_card.add(&timer_row);
+        box_widget.append(&get_started_card);
+
+        // Always visible: help entry point (also gamepad reachable)
+        let more_card = PreferencesGroup::builder().title("More").build();
+        let help_row = ActionRow::builder()
+            .title("Help & Shortcuts")
+            .subtitle("Keyboard and gamepad controls")
+            .activatable(true)
+            .build();
+        more_card.add(&help_row);
+        box_widget.append(&more_card);
+
         let on_switch = Rc::new(RefCell::new(None::<Rc<dyn Fn()>>));
         let on_switch_clone = Rc::clone(&on_switch);
         let browse_btn = Button::builder()
@@ -69,14 +101,17 @@ impl HomePage {
         box_widget.append(&browse_btn);
 
         clamp.set_child(Some(&box_widget));
-        scrolled.set_child(Some(&clamp));
-        widget.set_child(Some(&scrolled));
+        let scrolled_holder = scrolled;
+        scrolled_holder.set_child(Some(&clamp));
+        widget.set_child(Some(&scrolled_holder));
 
-        Rc::new(Self {
+        let page = Rc::new(Self {
             widget,
             store,
             on_open_plan: RefCell::new(initial_open_plan),
             on_switch_to_plans: on_switch,
+            on_switch_to_timer: RefCell::new(None),
+            on_open_help: RefCell::new(None),
             focus: Rc::new(RefCell::new(ControllerFocusTracker::new())),
             stats_box,
             recent_card,
@@ -84,7 +119,45 @@ impl HomePage {
             recent_row: Rc::new(RefCell::new(None)),
             recommended_row: Rc::new(RefCell::new(None)),
             browse_btn,
-        })
+            get_started_card,
+            help_row: help_row.clone(),
+            create_plan_row: create_plan_row.clone(),
+            timer_row: timer_row.clone(),
+        });
+
+        // "Get Started" + "More" row actions
+        {
+            let page_weak = Rc::downgrade(&page);
+            page.create_plan_row.connect_activated(move |_| {
+                if let Some(p) = page_weak.upgrade() {
+                    if let Some(ref cb) = *p.on_switch_to_plans.borrow() {
+                        cb();
+                    }
+                }
+            });
+        }
+        {
+            let page_weak = Rc::downgrade(&page);
+            page.timer_row.connect_activated(move |_| {
+                if let Some(p) = page_weak.upgrade() {
+                    if let Some(ref cb) = *p.on_switch_to_timer.borrow() {
+                        cb();
+                    }
+                }
+            });
+        }
+        {
+            let page_weak = Rc::downgrade(&page);
+            page.help_row.connect_activated(move |_| {
+                if let Some(p) = page_weak.upgrade() {
+                    if let Some(ref cb) = *p.on_open_help.borrow() {
+                        cb();
+                    }
+                }
+            });
+        }
+
+        page
     }
 
     pub fn widget(&self) -> &Bin {
@@ -95,6 +168,14 @@ impl HomePage {
         *self.on_switch_to_plans.borrow_mut() = Some(cb);
     }
 
+    pub fn set_on_switch_to_timer(&self, cb: Rc<dyn Fn()>) {
+        *self.on_switch_to_timer.borrow_mut() = Some(cb);
+    }
+
+    pub fn set_on_open_help(&self, cb: Rc<dyn Fn()>) {
+        *self.on_open_help.borrow_mut() = Some(cb);
+    }
+
     pub fn set_on_open_plan(&self, cb: Rc<dyn Fn(&TrainingPlan)>) {
         *self.on_open_plan.borrow_mut() = cb;
     }
@@ -103,8 +184,16 @@ impl HomePage {
         self.update_stats();
         self.update_recent();
         self.update_recommended();
+        self.update_empty_states();
         self.refresh_focus();
         self.focus.borrow_mut().focus_first();
+    }
+
+    /// The "Get Started" card is only useful for new users; hide it once
+    /// there is training history.
+    fn update_empty_states(&self) {
+        let has_history = !self.store.load_sessions().is_empty();
+        self.get_started_card.set_visible(!has_history);
     }
 
     fn update_stats(&self) {
@@ -173,6 +262,10 @@ impl HomePage {
 
     fn refresh_focus(&self) {
         let mut widgets: Vec<gtk4::Widget> = Vec::new();
+        if self.get_started_card.is_visible() {
+            widgets.push(self.create_plan_row.clone().upcast::<gtk4::Widget>());
+            widgets.push(self.timer_row.clone().upcast::<gtk4::Widget>());
+        }
         if let Some(ref row) = *self.recent_row.borrow() {
             widgets.push(row.clone().upcast::<gtk4::Widget>());
         }
@@ -180,6 +273,7 @@ impl HomePage {
             widgets.push(row.clone().upcast::<gtk4::Widget>());
         }
         widgets.push(self.browse_btn.clone().upcast());
+        widgets.push(self.help_row.clone().upcast());
         self.focus.borrow_mut().set_widgets(widgets);
     }
 

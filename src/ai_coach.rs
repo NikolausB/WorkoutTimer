@@ -35,6 +35,7 @@ pub struct AICoachPage {
     history_switch: SwitchRow,
     system_prompt: TextView,
     pub(crate) user_prompt: TextView,
+    suggestion_chips: Vec<gtk4::Button>,
     generate_btn: ButtonRow,
     cancel_btn: gtk4::Button,
     pub(crate) progress_label: Label,
@@ -141,6 +142,22 @@ impl AICoachPage {
         user_frame.set_child(Some(&user_scroll));
         prompt_group.add(&user_frame);
 
+        // Suggestion chips: one tap fills the prompt box.
+        let chips_box = GtkBox::new(Orientation::Horizontal, 6);
+        chips_box.set_halign(Align::Start);
+        let suggestion_chips: Vec<gtk4::Button> = ["20-minute full body workout", "Beginner pushup plan", "5-minute mobility routine"]
+            .iter()
+            .map(|text| {
+                let btn = Button::builder()
+                    .label(*text)
+                    .css_classes(["pill"])
+                    .build();
+                chips_box.append(&btn);
+                btn
+            })
+            .collect();
+        prompt_group.add(&chips_box);
+
         box_widget.append(&prompt_group);
 
         // Action group
@@ -239,6 +256,7 @@ impl AICoachPage {
             history_switch,
             system_prompt,
             user_prompt,
+            suggestion_chips: suggestion_chips.clone(),
             generate_btn,
             cancel_btn: cancel_btn.clone(),
             progress_label: progress_label.clone(),
@@ -276,6 +294,17 @@ impl AICoachPage {
                     let key_row = p.key_row.clone();
                     key_row.set_visible(idx == 1);
                     p.refresh_focus();
+                }
+            });
+        }
+
+        // Suggestion chips fill the prompt box
+        for chip in &suggestion_chips {
+            let page_weak = Rc::downgrade(&page);
+            let text = chip.label().unwrap_or_default().to_string();
+            chip.connect_clicked(move |_| {
+                if let Some(p) = page_weak.upgrade() {
+                    p.user_prompt.buffer().set_text(&text);
                 }
             });
         }
@@ -817,6 +846,9 @@ impl AICoachPage {
                 widgets.push(self.key_row.clone().upcast());
             }
             widgets.push(self.history_switch.clone().upcast());
+            for chip in &self.suggestion_chips {
+                widgets.push(chip.clone().upcast());
+            }
             widgets.push(self.system_prompt.clone().upcast());
             widgets.push(self.user_prompt.clone().upcast());
         }

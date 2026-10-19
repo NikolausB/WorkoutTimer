@@ -49,11 +49,22 @@ pub fn add_user_exercise(
     entry
 }
 
-#[allow(dead_code)]
-pub fn delete_user_exercise(index: usize) {
+/// Remove the user exercise at `index` and return it, so the caller can offer
+/// an "Undo" that re-inserts it at the same position.
+pub fn delete_user_exercise(index: usize) -> Option<UserExercise> {
     let mut exercises = load_user_exercises();
-    if index < exercises.len() {
-        exercises.remove(index);
-        save_user_exercises(&exercises);
+    if index >= exercises.len() {
+        return None;
     }
+    let removed = exercises.remove(index);
+    save_user_exercises(&exercises);
+    Some(removed)
+}
+
+/// Re-insert a previously removed user exercise at its original position.
+pub fn insert_user_exercise(index: usize, exercise: &UserExercise) {
+    let mut exercises = load_user_exercises();
+    let index = index.min(exercises.len());
+    exercises.insert(index, exercise.clone());
+    save_user_exercises(&exercises);
 }

@@ -99,8 +99,8 @@ impl ExercisePicker {
         *picker.exercises.borrow_mut() = all.clone();
 
         // Add rows
-        for ex in &all {
-            picker.add_exercise_row(ex);
+        for (i, ex) in all.iter().enumerate() {
+            picker.add_exercise_row(ex, i);
         }
 
         // Search + category filter
@@ -210,7 +210,7 @@ impl ExercisePicker {
         self.focus_idx.set(-1);
     }
 
-    fn add_exercise_row(&self, ex: &ExerciseEntry) {
+    fn add_exercise_row(self: &Rc<Self>, ex: &ExerciseEntry, list_index: usize) {
         let name = if ex.name.is_empty() {
             "Unknown".to_string()
         } else {
@@ -250,7 +250,77 @@ impl ExercisePicker {
             }
         }
 
+        // Custom exercises can be deleted (with undo).
+        if ex.is_user {
+            let user_index = self
+                .exercises
+                .borrow()
+                .iter()
+                .take(list_index)
+                .filter(|e| e.is_user)
+                .count();
+            let del = Button::builder()
+                .icon_name("user-trash-symbolic")
+                .css_classes(["flat"])
+                .tooltip_text("Delete custom exercise")
+                .valign(gtk4::Align::Center)
+                .build();
+            {
+                let page_weak = Rc::downgrade(self);
+                del.connect_clicked(move |_| {
+                    let Some(p) = page_weak.upgrade() else { return };
+                    let Some(removed) = crate::user_exercises::delete_user_exercise(user_index)
+                    else {
+                        return;
+                    };
+                    p.reload_list();
+                    crate::window::show_app_toast_action(
+                        &format!("\"{}\" deleted", removed.name),
+                        "Undo",
+                        Rc::new(move || {
+                            crate::user_exercises::insert_user_exercise(user_index, &removed);
+                            crate::window::refresh_all_pages();
+                        }),
+                    );
+                });
+            }
+            row.add_suffix(&del);
+        }
+
         self.list_box.append(&row);
+    }
+
+    /// Rebuild the exercise list (after adding/removing custom exercises).
+    fn reload_list(self: &Rc<Self>) {
+        let mut child = self.list_box.first_child();
+        while let Some(c) = child {
+            child = c.next_sibling();
+            self.list_box.remove(&c);
+        }
+        let all = load_all_exercises();
+        {
+            let mut cats: Vec<String> = Vec::new();
+            for ex in &all {
+                if let Some(c) = &ex.category {
+                    if !cats.contains(c) {
+                        cats.push(c.clone());
+                    }
+                }
+            }
+            cats.sort();
+            let mut labels = vec!["All Categories".to_string()];
+            labels.extend(cats.clone());
+            let model = gtk4::StringList::new(
+                &labels.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+            );
+            self.category_dropdown.set_model(Some(&model));
+            *self.categories.borrow_mut() = cats;
+        }
+        *self.exercises.borrow_mut() = all.clone();
+        for (i, ex) in all.iter().enumerate() {
+            self.add_exercise_row(ex, i);
+        }
+        self.apply_filters();
     }
 
     fn visible_rows(&self) -> Vec<gtk4::Widget> {
@@ -433,7 +503,8 @@ impl ExercisePicker {
                     is_user: true,
                 };
                 p.exercises.borrow_mut().push(ex_entry.clone());
-                p.add_exercise_row(&ex_entry);
+                let idx = p.exercises.borrow().len().saturating_sub(1);
+                p.add_exercise_row(&ex_entry, idx);
                 dialog_for_save.close();
             });
         }

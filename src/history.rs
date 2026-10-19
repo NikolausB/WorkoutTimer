@@ -29,6 +29,7 @@ pub struct HistoryPage {
     stats_box: GtkBox,
     sessions: RefCell<Vec<TrainingSession>>,
     session_rows: RefCell<Vec<ActionRow>>,
+    on_switch_to_timer: RefCell<Option<Rc<dyn Fn()>>>,
     self_weak: RefCell<std::rc::Weak<HistoryPage>>,
     current_session_id: RefCell<Option<String>>,
     list_focus: RefCell<ControllerFocusTracker>,
@@ -113,10 +114,25 @@ impl HistoryPage {
         scrolled.set_child(Some(&session_list_box));
         list_stack.add_named(&scrolled, Some("list"));
 
-        let empty_label = Label::new(Some("No training sessions yet."));
-        empty_label.add_css_class("dim-label");
-        empty_label.set_vexpand(true);
-        list_stack.add_named(&empty_label, Some("empty"));
+        // Empty state with a shortcut to the round timer
+        let empty_box = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+        empty_box.set_vexpand(true);
+        empty_box.set_valign(gtk4::Align::Center);
+        empty_box.set_halign(gtk4::Align::Center);
+        let empty_label = Label::new(Some("No training sessions yet"));
+        empty_label.add_css_class("title-3");
+        empty_box.append(&empty_label);
+        let empty_hint = Label::new(Some(
+            "Finish a workout and it will show up here with your progress.",
+        ));
+        empty_hint.add_css_class("dim-label");
+        empty_box.append(&empty_hint);
+        let empty_timer_btn = gtk4::Button::builder()
+            .label("Start a Round Timer")
+            .css_classes(["suggested-action"])
+            .build();
+        empty_box.append(&empty_timer_btn);
+        list_stack.add_named(&empty_box, Some("empty"));
 
         list_box.append(&list_stack);
 
@@ -184,6 +200,7 @@ impl HistoryPage {
             stats_box,
             sessions: RefCell::new(Vec::new()),
             session_rows: RefCell::new(Vec::new()),
+            on_switch_to_timer: RefCell::new(None),
             self_weak: RefCell::new(std::rc::Weak::new()),
             current_session_id: RefCell::new(None),
             list_focus: RefCell::new(ControllerFocusTracker::new()),
@@ -197,6 +214,16 @@ impl HistoryPage {
 
         // Wire signals
         *page.self_weak.borrow_mut() = Rc::downgrade(&page);
+        {
+            let page_weak = Rc::downgrade(&page);
+            empty_timer_btn.connect_clicked(move |_| {
+                if let Some(p) = page_weak.upgrade() {
+                    if let Some(ref cb) = *p.on_switch_to_timer.borrow() {
+                        cb();
+                    }
+                }
+            });
+        }
         {
             let page_weak = Rc::downgrade(&page);
             let btn = months_btn.clone();
@@ -248,12 +275,27 @@ impl HistoryPage {
             let page_weak = Rc::downgrade(&page);
             delete_btn.connect_activated(move |_| {
                 let Some(p) = page_weak.upgrade() else { return };
-                if let Some(session_id) = p.current_session_id.borrow().as_ref() {
-                    p.store.delete_session(session_id);
-                }
+                let Some(session_id) = p.current_session_id.borrow().clone() else {
+                    return;
+                };
+                let Some(session) = p.store.get_session(&session_id) else {
+                    return;
+                };
+                p.store.delete_session(&session_id);
                 *p.current_session_id.borrow_mut() = None;
                 p.nav.pop_to_page(&p.list_page);
                 p.refresh();
+
+                // Undo: put the session back (same id) and refresh.
+                let store = Rc::clone(&p.store);
+                crate::window::show_app_toast_action(
+                    "Session deleted",
+                    "Undo",
+                    Rc::new(move || {
+                        store.save_session(&session);
+                        crate::window::refresh_all_pages();
+                    }),
+                );
             });
         }
 
@@ -277,6 +319,10 @@ impl HistoryPage {
 
     pub fn widget(&self) -> &Bin {
         &self.widget
+    }
+
+    pub fn set_on_switch_to_timer(&self, cb: Rc<dyn Fn()>) {
+        *self.on_switch_to_timer.borrow_mut() = Some(cb);
     }
 
     pub fn refresh(&self) {

@@ -178,6 +178,15 @@ pub fn load_all_exercises() -> Vec<ExerciseEntry> {
     entries
 }
 
+/// The bundled starter plans (templates) shipped with the app.
+pub fn load_default_plans() -> Vec<crate::models::TrainingPlan> {
+    let path = std::path::PathBuf::from(get_plans_dir()).join("default_plans.json");
+    let Ok(content) = fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    serde_json::from_str(&content).unwrap_or_default()
+}
+
 pub fn get_plans_dir() -> String {
     let flatpak = PathBuf::from("/app/share/training/resources/plans");
     if flatpak.exists() {

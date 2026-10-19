@@ -1,71 +1,63 @@
 use gtk4::prelude::*;
 use gtk4::{Align, Box as GtkBox, Label, Orientation};
-use std::collections::HashMap;
 
-fn build_hints() -> HashMap<String, HintValue> {
-    let mut m = HashMap::new();
-
-    let mut runner = HashMap::new();
-    runner.insert(
-        "exercise".to_string(),
-        "[A] Done  [Y] Skip  [B] Back  [Start] Pause  [Guide] Fullscreen".to_string(),
-    );
-    runner.insert(
-        "rest".to_string(),
-        "[A] Done  [Y] Skip Rest  [Start] Pause  [Guide] Fullscreen".to_string(),
-    );
-    runner.insert(
-        "timed".to_string(),
-        "[Start] Pause/Resume  [B] Back  [Guide] Fullscreen".to_string(),
-    );
-    m.insert("runner_exercise".to_string(), HintValue::Sub(runner));
-
-    m.insert(
-        "runner_summary".to_string(),
-        HintValue::Simple("[A] Back to Menu  [Guide] Fullscreen".to_string()),
-    );
-    m.insert(
-        "timer".to_string(),
-        HintValue::Simple(
+/// Controller hint text for a context (and optional sub-context).
+///
+/// This is the single source of truth: the hint bar at the bottom of the
+/// window and the help page both render these strings, so they can never
+/// drift apart.
+pub fn hints_for(context: &str, sub_key: &str) -> String {
+    match context {
+        "runner_exercise" => match sub_key {
+            "rest" => "[A] Done  [Y] Skip Rest  [Start] Pause  [Guide] Fullscreen".to_string(),
+            "timed" => "[Start] Pause/Resume  [B] Back  [Guide] Fullscreen".to_string(),
+            _ => "[A] Done  [Y] Skip  [B] Back  [Start] Pause  [Guide] Fullscreen".to_string(),
+        },
+        "runner_summary" => "[A] Back to Menu  [Guide] Fullscreen".to_string(),
+        "timer" => {
             "[A] Start  [Start] Pause  [B] Skip  [X] Reset  [L1/R1] Tabs  [Guide] Fullscreen"
-                .to_string(),
-        ),
-    );
-    m.insert(
-        "list".to_string(),
-        HintValue::Simple("[A] Open  [X] Favorite  [B] Back  [L1/R1] Tabs  [Guide] Fullscreen".to_string()),
-    );
-    m.insert(
-        "editor".to_string(),
-        HintValue::Simple(
+                .to_string()
+        }
+        "list" => "[A] Open  [X] Favorite  [B] Back  [L1/R1] Tabs  [Guide] Fullscreen".to_string(),
+        "editor" => {
             "[A] Enter  [B] Back  [←/→] Adjust  [X] Toggle  [Start] Start Training  [L1/R1] Tabs  [Guide] Fullscreen"
-                .to_string(),
-        ),
-    );
-    m.insert(
-        "ai_coach".to_string(),
-        HintValue::Simple(
+                .to_string()
+        }
+        "ai_coach" => {
             "[A] Submit  [B] Back  [←/→] Toggle  [Select] Keyboard  [L1/R1] Tabs  [Guide] Fullscreen"
-                .to_string(),
-        ),
-    );
-    m.insert(
-        "keyboard".to_string(),
-        HintValue::Simple("[A] Type  [B] Backspace  [Y] Shift  [←/→] Move  [Start] Close".to_string()),
-    );
-
-    m
+                .to_string()
+        }
+        "keyboard" => {
+            "[A] Type  [B] Backspace  [Y] Shift  [←/→] Move  [Start] Close".to_string()
+        }
+        _ => String::new(),
+    }
 }
 
-enum HintValue {
-    Simple(String),
-    Sub(HashMap<String, String>),
-}
+/// All controller contexts, in the order the help page lists them.
+pub const HINT_CONTEXTS: &[(&str, &str)] = &[
+    ("timer", "Round timer"),
+    ("list", "Training plans"),
+    ("editor", "Plan editor"),
+    ("runner_exercise", "Workout runner"),
+    ("runner_summary", "Workout summary"),
+    ("ai_coach", "AI coach"),
+    ("keyboard", "On-screen keyboard"),
+];
+
+/// Keyboard shortcuts shown in the help page.
+pub const KEYBOARD_SHORTCUTS: &[(&str, &str)] = &[
+    ("Space", "Start / pause the timer or workout"),
+    ("S", "Skip the current round or exercise"),
+    ("R", "Reset the round timer"),
+    ("?", "Open this help page"),
+    ("Ctrl + ,", "Open preferences"),
+    ("Esc", "Close dialogs and overlays"),
+];
 
 pub struct ControllerHintsOverlay {
     box_widget: GtkBox,
     label: Label,
-    hints: HashMap<String, HintValue>,
     context: Option<String>,
     sub_key: String,
 }
@@ -84,7 +76,6 @@ impl ControllerHintsOverlay {
         Self {
             box_widget,
             label,
-            hints: build_hints(),
             context: None,
             sub_key: String::new(),
         }
@@ -114,14 +105,9 @@ impl ControllerHintsOverlay {
     }
 
     fn update_text(&mut self) {
-        let text = if let Some(ctx) = &self.context {
-            match self.hints.get(ctx) {
-                Some(HintValue::Simple(t)) => t.clone(),
-                Some(HintValue::Sub(map)) => map.get(&self.sub_key).cloned().unwrap_or_default(),
-                None => String::new(),
-            }
-        } else {
-            String::new()
+        let text = match &self.context {
+            Some(ctx) => hints_for(ctx, &self.sub_key),
+            None => String::new(),
         };
 
         self.label.set_label(&text);
