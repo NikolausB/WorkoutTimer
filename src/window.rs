@@ -265,8 +265,7 @@ impl MainWindow {
         }
 
         // Keyboard shortcuts: Space = start/pause, S = skip, R = reset
-        // (only on the timer and the plan runner, and never while typing or
-        // while a widget that handles Space itself has focus).
+        // (only on the timer and the plan runner).
         {
             let mw_weak = Rc::downgrade(&mw);
             let key_ctrl = gtk4::EventControllerKey::new();
@@ -278,19 +277,39 @@ impl MainWindow {
                 if m.open_dialog.borrow().is_some() {
                     return Propagation::Proceed;
                 }
-                if let Some(focused) = gtk4::prelude::GtkWindowExt::focus(&m.window) {
+
+                // While typing, no shortcuts at all.
+                let typing = if let Some(focused) = gtk4::prelude::GtkWindowExt::focus(&m.window) {
                     let w = focused.upcast_ref::<gtk4::Widget>();
-                    if w.is::<gtk4::Editable>()
+                    w.is::<gtk4::Editable>()
                         || w.is::<gtk4::TextView>()
                         || w.is::<gtk4::SearchEntry>()
-                        || w.is::<gtk4::Button>()
-                        || w.is::<gtk4::Switch>()
-                        || w.is::<gtk4::DropDown>()
-                        || w.is::<libadwaita::ComboRow>()
-                    {
-                        return Propagation::Proceed;
-                    }
+                } else {
+                    false
+                };
+                if typing {
+                    return Propagation::Proceed;
                 }
+
+                // Space belongs to a focused button/switch (it activates it);
+                // all other keys stay available as shortcuts.
+                let space_is_taken = if key == gtk4::gdk::Key::space {
+                    if let Some(focused) = gtk4::prelude::GtkWindowExt::focus(&m.window) {
+                        let w = focused.upcast_ref::<gtk4::Widget>();
+                        w.is::<gtk4::Button>()
+                            || w.is::<gtk4::Switch>()
+                            || w.is::<gtk4::DropDown>()
+                            || w.is::<libadwaita::ComboRow>()
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                if space_is_taken {
+                    return Propagation::Proceed;
+                }
+
                 let on_timer = m.visible_tab() == "timer";
                 let on_runner = m.visible_tab() == "plans"
                     && m.training_plan.visible_page() == "runner";
@@ -367,8 +386,8 @@ impl MainWindow {
         {
             let settings = load_settings();
             if settings.window_width > 0 && settings.window_height > 0 {
-                mw.window
-                    .set_default_size(settings.window_width, settings.window_height);
+                let (w, h) = mw.clamp_to_screen(settings.window_width, settings.window_height);
+                mw.window.set_default_size(w, h);
             }
             let last = settings.last_tab;
             if !last.is_empty() {
@@ -394,8 +413,13 @@ impl MainWindow {
             mw.window.connect_close_request(move |win| {
                 if let Some(m) = mw_weak.upgrade() {
                     let mut s = load_settings();
-                    s.window_width = win.width();
-                    s.window_height = win.height();
+                    // Only remember the size of a normal window — a
+                    // maximized or fullscreen window would be restored at
+                    // screen size and look like it is always fullscreen.
+                    if !win.is_fullscreen() && !win.is_maximized() {
+                        s.window_width = win.width();
+                        s.window_height = win.height();
+                    }
                     s.last_tab = m.visible_tab().to_string();
                     save_settings(&s);
                 }
@@ -520,46 +544,21 @@ impl MainWindow {
                 }
                 std::thread::sleep(std::time::Duration::from_millis(60));
             }
-            let w = content.width().max(1) as f64;
-            let h = content.height().max(1) as f64;
-            let snap = gtk4::Snapshot::new();
-            let paintable = gtk4::WidgetPaintable::new(Some(&content));
-            paintable.snapshot(&snap, w, h);
-            // Unwrap the widget paintable's render node:
-            // gtk_snapshot_free_to_node returns None for the wrapper chain,
-            // but the non-consuming ffi call on the re-snapshotted paintable
-            // yields the node directly.
-            let node = snap.to_paintable(None).and_then(|p| {
-                use gtk4::glib::translate::ToGlibPtr;
-                let snap2 = gtk4::Snapshot::new();
-                p.snapshot(&snap2, w, h);
-                let node2 = unsafe {
-                    let ptr2: *mut gtk4::ffi::GtkSnapshot = snap2.to_glib_none().0;
-                    gtk4::ffi::gtk_snapshot_to_node(ptr2)
-                };
-                if node2.is_null() {
-                    None
-                } else {
-                    use gtk4::glib::translate::from_glib_full;
-                    let node: gtk4::gsk::RenderNode = unsafe { from_glib_full(node2) };
-                    Some(node)
+            capture_widget(&content, &renderer, &format!("{}/{}.png", dir, tab));
+        }
+
+        // The workout runner lives inside the plans tab — capture it too.
+        if let Some(plan) = self.training_plan.first_plan() {
+            self.stack.set_visible_child_name("plans");
+            self.training_plan.start_training(&plan);
+            for _ in 0..10 {
+                for _ in 0..5 {
+                    let _ = ctx.iteration(false);
                 }
-            });
-            let Some(node) = node else {
-                eprintln!("[shots] {} snapshot produced no node", tab);
-                continue;
-            };
-            let viewport = gtk4::graphene::Rect::new(0.0, 0.0, w as f32, h as f32);
-            let tex = gtk4::gsk::prelude::GskRendererExt::render_texture(
-                &renderer,
-                &node,
-                Some(&viewport),
-            );
-            let path = format!("{}/{}.png", dir, tab);
-            match tex.save_to_png(&path) {
-                Ok(()) => println!("screenshot saved: {}", path),
-                Err(e) => eprintln!("screenshot {} failed: {}", path, e),
+                std::thread::sleep(std::time::Duration::from_millis(60));
             }
+            capture_widget(&content, &renderer, &format!("{}/runner.png", dir));
+            self.training_plan.abort_training();
         }
 
         // A realized renderer must be unrealized before disposal
@@ -985,8 +984,34 @@ impl MainWindow {
         *self.resize_timeout_id.borrow_mut() = Some(id);
     }
 
-    fn font_dims(&self) -> (i32, i32) {
-        let mut w = self.stack.width();
+    /// Keep a window size inside the screen (a stored size from a
+    /// maximized window would otherwise cover the whole screen).
+    fn clamp_to_screen(&self, width: i32, height: i32) -> (i32, i32) {
+        let mut w = width;
+        let mut h = height;
+        let display = gtk4::prelude::RootExt::display(&self.window);
+        {
+            // The monitor the window is on (or the first one).
+            let monitor = display
+                .monitors()
+                .item(0)
+                .and_then(|m| m.downcast::<gtk4::gdk::Monitor>().ok());
+            if let Some(monitor) = monitor {
+                let geo = monitor.geometry();
+                if geo.width() > 0 {
+                    // At most 95% of the screen …
+                    w = w.min((geo.width() as f64 * 0.95) as i32);
+                }
+                if geo.height() > 0 {
+                    h = h.min((geo.height() as f64 * 0.95) as i32);
+                }
+            }
+        }
+        // … and never bigger than a comfortable maximum.
+        (w.clamp(480, 1600), h.clamp(480, 1000))
+    }
+
+    fn font_dims(&self) -> (i32, i32) {        let mut w = self.stack.width();
         let mut h = self.stack.height();
         if w <= 1 || h <= 1 {
             w = self.window.width();
@@ -1089,5 +1114,44 @@ impl MainWindow {
                 m.on_dialog_closed();
             }
         });
+    }
+}
+/// Render a widget to a PNG file (debug screenshot mode).
+fn capture_widget(content: &gtk4::Widget, renderer: &gtk4::gsk::Renderer, path: &str) {
+    let w = content.width().max(1) as f64;
+    let h = content.height().max(1) as f64;
+    let snap = gtk4::Snapshot::new();
+    let paintable = gtk4::WidgetPaintable::new(Some(content));
+    paintable.snapshot(&snap, w, h);
+    // Unwrap the widget paintable's render node:
+    // gtk_snapshot_free_to_node returns None for the wrapper chain,
+    // but the non-consuming ffi call on the re-snapshotted paintable
+    // yields the node directly.
+    let node = snap.to_paintable(None).and_then(|p| {
+        use gtk4::glib::translate::ToGlibPtr;
+        let snap2 = gtk4::Snapshot::new();
+        p.snapshot(&snap2, w, h);
+        let node2 = unsafe {
+            let ptr2: *mut gtk4::ffi::GtkSnapshot = snap2.to_glib_none().0;
+            gtk4::ffi::gtk_snapshot_to_node(ptr2)
+        };
+        if node2.is_null() {
+            None
+        } else {
+            use gtk4::glib::translate::from_glib_full;
+            let node: gtk4::gsk::RenderNode = unsafe { from_glib_full(node2) };
+            Some(node)
+        }
+    });
+    let Some(node) = node else {
+        eprintln!("[shots] {} snapshot produced no node", path);
+        return;
+    };
+    let viewport = gtk4::graphene::Rect::new(0.0, 0.0, w as f32, h as f32);
+    let tex =
+        gtk4::gsk::prelude::GskRendererExt::render_texture(renderer, &node, Some(&viewport));
+    match tex.save_to_png(path) {
+        Ok(()) => println!("screenshot saved: {}", path),
+        Err(e) => eprintln!("screenshot {} failed: {}", path, e),
     }
 }

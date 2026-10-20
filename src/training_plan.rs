@@ -318,6 +318,26 @@ impl TrainingPlanPage {
         runner_box.set_margin_start(16);
         runner_box.set_margin_end(16);
 
+        // Controls at the top: they must always be visible, even on short
+        // windows (the ring and the exercise name can take the rest).
+        let runner_pause_btn = Button::builder().label("Pause").build();
+        let runner_add30_btn = Button::builder()
+            .label("+30s")
+            .tooltip_text("Add 30 seconds to the current timer")
+            .css_classes(["flat"])
+            .sensitive(false)
+            .build();
+        let runner_skip_btn = Button::builder()
+            .label("Skip")
+            .css_classes(["destructive-action"])
+            .build();
+        let btn_box = GtkBox::new(Orientation::Horizontal, 12);
+        btn_box.set_halign(Align::Center);
+        btn_box.append(&runner_pause_btn);
+        btn_box.append(&runner_add30_btn);
+        btn_box.append(&runner_skip_btn);
+        runner_box.append(&btn_box);
+
         let runner_plan_label = Label::new(None);
         runner_plan_label.add_css_class("title-2");
         runner_plan_label.set_valign(Align::Start);
@@ -333,7 +353,7 @@ impl TrainingPlanPage {
         runner_box.append(&runner_workout_bar);
 
         let runner_exercise_label = Label::new(None);
-        runner_exercise_label.set_vexpand(true);
+        runner_exercise_label.set_vexpand(false);
         runner_exercise_label.set_valign(Align::Center);
         runner_exercise_label.set_halign(Align::Center);
         runner_exercise_label.set_justify(gtk4::Justification::Center);
@@ -385,27 +405,12 @@ impl TrainingPlanPage {
         reps_revealer.set_reveal_child(false);
         runner_box.append(&reps_revealer);
 
-        let controls_group = PreferencesGroup::new();
-        let runner_pause_btn = Button::builder().label("Pause").build();
-        let runner_add30_btn = Button::builder()
-            .label("+30s")
-            .tooltip_text("Add 30 seconds to the current timer")
-            .css_classes(["flat"])
-            .sensitive(false)
-            .build();
-        let runner_skip_btn = Button::builder()
-            .label("Skip")
-            .css_classes(["destructive-action"])
-            .build();
-        let btn_box = GtkBox::new(Orientation::Horizontal, 12);
-        btn_box.set_halign(Align::Center);
-        btn_box.append(&runner_pause_btn);
-        btn_box.append(&runner_add30_btn);
-        btn_box.append(&runner_skip_btn);
-        controls_group.add(&btn_box);
-        runner_box.append(&controls_group);
-
-        runner_toolbar.set_content(Some(&runner_box));
+        // Scrollable so the runner never overflows on short windows.
+        let runner_scrolled = ScrolledWindow::new();
+        runner_scrolled.set_vexpand(true);
+        runner_scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+        runner_scrolled.set_child(Some(&runner_box));
+        runner_toolbar.set_content(Some(&runner_scrolled));
 
         let runner_page = NavigationPage::builder().title("Training").build();
         runner_page.set_child(Some(&runner_toolbar));
@@ -538,6 +543,19 @@ impl TrainingPlanPage {
 
     pub fn widget(&self) -> &Bin {
         &self.widget
+    }
+
+    /// The first stored plan (used by the debug screenshot mode).
+    pub fn first_plan(&self) -> Option<TrainingPlan> {
+        self.store.load_plans().into_iter().next()
+    }
+
+    /// Stop a running workout without saving the session (debug mode).
+    pub fn abort_training(&self) {
+        self.timer.stop();
+        *self.running_session.borrow_mut() = None;
+        *self.running_plan.borrow_mut() = None;
+        self.show_list();
     }
 
     /// Window hook so controller events reach transient AlertDialogs.
@@ -1629,6 +1647,8 @@ impl TrainingPlanPage {
         self.runner_workout_bar.set_fraction(0.0);
         self.runner_add30_btn.set_sensitive(false);
         self.nav.push(&self.runner_page);
+        self.refresh_runner_focus();
+        self.runner_focus.borrow_mut().focus_first();
         self.start_current_exercise();
         // The runner lives inside the plans tab: fonts must be re-applied
         // now that it becomes visible (sized labels for countdown etc.).
@@ -2332,6 +2352,17 @@ impl TrainingPlanPage {
         }
     }
 
+    /// Focusable widgets of the workout runner (in visual order).
+    fn refresh_runner_focus(&self) {
+        let mut widgets: Vec<gtk4::Widget> = Vec::new();
+        widgets.push(self.runner_pause_btn.clone().upcast());
+        widgets.push(self.runner_add30_btn.clone().upcast());
+        widgets.push(self.runner_skip_btn.clone().upcast());
+        widgets.push(self.reps_spin.clone().upcast());
+        widgets.push(self.reps_done_btn.clone().upcast());
+        self.runner_focus.borrow_mut().set_widgets(widgets);
+    }
+
     pub fn controller_dpad_down(&self) {
         match self.visible_page() {
             "editor" => self.editor_focus.borrow_mut().cycle(1),
@@ -2416,7 +2447,6 @@ impl TrainingPlanPage {
     pub fn update_fonts(&self, width: i32, height: i32) {
         apply_scaling(
             &[
-                (LabelType::Timer, &self.runner_countdown),
                 (LabelType::Exercise, &self.runner_exercise_label),
                 (LabelType::Info, &self.runner_plan_label),
                 (LabelType::Info, &self.runner_phase_label),
@@ -2425,6 +2455,14 @@ impl TrainingPlanPage {
             width,
             height,
         );
+
+        // The ring adapts to the window height and the countdown follows it,
+        // so the runner always fits on short screens.
+        if height > 0 {
+            let size = ((height as f64 * 0.30) as i32).clamp(160, 300);
+            self.runner_ring.set_size(size);
+            crate::ui_scaling::set_label_size(&self.runner_countdown, (size as f64 * 0.20) as i32);
+        }
     }
 }
 

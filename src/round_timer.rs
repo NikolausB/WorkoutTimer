@@ -6,7 +6,7 @@ use crate::sound::SoundPlayer;
 use crate::timer::TimerCore;
 use crate::ui_scaling::{apply_scaling, LabelType};
 use gtk4::prelude::*;
-use gtk4::{Align, Box as GtkBox, Button, Label, Orientation};
+use gtk4::{Align, Box as GtkBox, Button, Label, Orientation, ScrolledWindow};
 use libadwaita::prelude::*;
 use libadwaita::{Bin, PreferencesGroup, SpinRow, SwitchRow};
 use std::cell::{Cell, RefCell};
@@ -91,6 +91,68 @@ impl RoundTimerPage {
         main_box.set_margin_start(24);
         main_box.set_margin_end(24);
 
+        // ---- Action row on top (Start / Pause / Reset / Skip) ----
+        let btn_box = GtkBox::new(Orientation::Horizontal, 12);
+        btn_box.set_halign(Align::Center);
+
+        let start_btn = Button::builder()
+            .label("Start")
+            .css_classes(["suggested-action"])
+            .build();
+        btn_box.append(&start_btn);
+
+        let pause_btn = Button::builder()
+            .label("Pause")
+            .sensitive(false)
+            .css_classes(["flat"])
+            .build();
+        btn_box.append(&pause_btn);
+
+        let reset_btn = Button::builder()
+            .label("Reset")
+            .sensitive(false)
+            .css_classes(["flat"])
+            .build();
+        btn_box.append(&reset_btn);
+
+        let skip_btn = Button::builder()
+            .label("Skip")
+            .sensitive(false)
+            .css_classes(["destructive-action"])
+            .build();
+        btn_box.append(&skip_btn);
+
+        main_box.append(&btn_box);
+
+        // ---- Round / phase labels (compact, right under the buttons) ----
+        let round_label = Label::new(Some("Round 0 / 0"));
+        round_label.add_css_class("title-2");
+        round_label.set_halign(Align::Center);
+        main_box.append(&round_label);
+
+        let phase_label = Label::new(Some(""));
+        phase_label.set_css_classes(&["heading", "phase-reps"]);
+        phase_label.set_halign(Align::Center);
+        main_box.append(&phase_label);
+
+        let summary_label = Label::new(None);
+        summary_label.add_css_class("dim-label");
+        summary_label.set_halign(Align::Center);
+        summary_label.set_visible(false);
+        main_box.append(&summary_label);
+
+        // ---- Circular ring with countdown in the middle ----
+        let ring = ProgressRing::new(260);
+        let ring_overlay = gtk4::Overlay::new();
+        ring_overlay.set_child(Some(ring.widget()));
+        let countdown_label = Label::new(Some("00:00"));
+        countdown_label.set_halign(Align::Center);
+        countdown_label.set_valign(Align::Center);
+        ring_overlay.add_overlay(&countdown_label);
+        ring_overlay.set_vexpand(false);
+        ring_overlay.set_valign(Align::Center);
+        main_box.append(&ring_overlay);
+
         let config_group = PreferencesGroup::builder().title("Configuration").build();
 
         let rounds_spin = Self::add_spin_row(&config_group, "Rounds", 1.0, 50.0, 10.0, 1.0);
@@ -142,70 +204,12 @@ impl RoundTimerPage {
         }
         main_box.append(&preset_box);
 
-        let timer_group = PreferencesGroup::builder().title("Timer").build();
-        timer_group.set_margin_top(12);
-
-        let round_label = Label::new(Some("Round 0 / 0"));
-        round_label.add_css_class("title-2");
-        timer_group.add(&round_label);
-
-        let phase_label = Label::new(Some(""));
-        phase_label.set_css_classes(&["heading", "phase-reps"]);
-        timer_group.add(&phase_label);
-
-        let summary_label = Label::new(None);
-        summary_label.add_css_class("dim-label");
-        summary_label.set_halign(Align::Center);
-        summary_label.set_visible(false);
-        timer_group.add(&summary_label);
-
-        main_box.append(&timer_group);
-
-        // Circular ring with countdown in the middle
-        let ring = ProgressRing::new(300);
-        let ring_overlay = gtk4::Overlay::new();
-        ring_overlay.set_child(Some(ring.widget()));
-        let countdown_label = Label::new(Some("00:00"));
-        countdown_label.set_halign(Align::Center);
-        countdown_label.set_valign(Align::Center);
-        ring_overlay.add_overlay(&countdown_label);
-        ring_overlay.set_vexpand(true);
-        ring_overlay.set_valign(Align::Center);
-        main_box.append(&ring_overlay);
-
-        let btn_box = GtkBox::new(Orientation::Horizontal, 12);
-        btn_box.set_halign(Align::Center);
-        btn_box.set_margin_bottom(12);
-
-        let start_btn = Button::builder()
-            .label("Start")
-            .css_classes(["suggested-action"])
-            .build();
-        btn_box.append(&start_btn);
-
-        let pause_btn = Button::builder()
-            .label("Pause")
-            .sensitive(false)
-            .css_classes(["flat"])
-            .build();
-        btn_box.append(&pause_btn);
-
-        let reset_btn = Button::builder()
-            .label("Reset")
-            .sensitive(false)
-            .css_classes(["flat"])
-            .build();
-        btn_box.append(&reset_btn);
-
-        let skip_btn = Button::builder()
-            .label("Skip")
-            .sensitive(false)
-            .css_classes(["destructive-action"])
-            .build();
-        btn_box.append(&skip_btn);
-
-        main_box.append(&btn_box);
-        widget.set_child(Some(&main_box));
+        // Scrollable so the page never overflows on short windows.
+        let scrolled = ScrolledWindow::new();
+        scrolled.set_vexpand(true);
+        scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+        scrolled.set_child(Some(&main_box));
+        widget.set_child(Some(&scrolled));
 
         let timer = Rc::new(TimerCore::new());
         let current_round = Rc::new(Cell::new(0i64));
@@ -885,13 +889,20 @@ impl RoundTimerPage {
     pub fn update_fonts(&self, width: i32, height: i32) {
         apply_scaling(
             &[
-                (LabelType::Timer, &self.countdown_label),
                 (LabelType::Info, &self.round_label),
                 (LabelType::Info, &self.phase_label),
             ],
             width,
             height,
         );
+
+        // The ring shrinks on short windows so the page keeps fitting; the
+        // countdown follows the ring size.
+        if height > 0 {
+            let size = ((height as f64 * 0.34) as i32).clamp(170, 300);
+            self.ring.set_size(size);
+            crate::ui_scaling::set_label_size(&self.countdown_label, (size as f64 * 0.20) as i32);
+        }
     }
 
     pub fn controller_dpad_up(&self) {

@@ -17,14 +17,21 @@ fn apply_font(label: &Label, size: i32, weight: pango::Weight) {
 }
 
 pub enum LabelType {
+    /// Timer-sized text (kept for callers that scale by window height).
+    #[allow(dead_code)]
     Timer,
     Exercise,
     Info,
 }
 
+/// Set an explicit font size (in px) on a label.
+pub fn set_label_size(label: &Label, size: i32) {
+    apply_font(label, size, pango::Weight::Heavy);
+}
+
 pub fn apply_scaling(labels: &[(LabelType, &Label)], width: i32, height: i32) {
     let timer_size = compute_font_size(width, height, 0.10, 36, 96);
-    let exercise_size = compute_font_size(width, height, 0.055, 24, 72);
+    let exercise_size = compute_font_size(width, height, 0.045, 24, 56);
     let info_size = compute_font_size(width, height, 0.035, 18, 40);
 
     for (label_type, label) in labels {

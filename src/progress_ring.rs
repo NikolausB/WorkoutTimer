@@ -52,6 +52,13 @@ impl ProgressRing {
         &self.widget
     }
 
+    /// Resize the ring (used to fit the page on short windows).
+    pub fn set_size(&self, size: i32) {
+        self.widget.set_content_width(size);
+        self.widget.set_content_height(size);
+        self.widget.queue_draw();
+    }
+
     /// Set progress in 0.0..=1.0.
     pub fn set_progress(&self, p: f64) {
         self.state.progress.set(p.clamp(0.0, 1.0));
