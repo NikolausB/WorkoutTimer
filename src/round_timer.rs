@@ -1,14 +1,14 @@
 use crate::controller_focus::ControllerFocusTracker;
-use crate::models::RoundConfig;
+use crate::models::{RoundConfig, TimerPresetEntry};
 use crate::progress_ring::{ProgressRing, COLOR_DONE, COLOR_GO, COLOR_NEUTRAL, COLOR_REST};
 use crate::settings::{load_settings, save_settings};
 use crate::sound::SoundPlayer;
 use crate::timer::TimerCore;
 use crate::ui_scaling::{apply_scaling, LabelType};
 use gtk4::prelude::*;
-use gtk4::{Align, Box as GtkBox, Button, Label, Orientation, ScrolledWindow};
+use gtk4::{Align, Box as GtkBox, Button, Label, ListBox, Orientation, ScrolledWindow};
 use libadwaita::prelude::*;
-use libadwaita::{Bin, PreferencesGroup, SpinRow, SwitchRow};
+use libadwaita::{ActionRow, Bin, Dialog, EntryRow, PreferencesGroup, SpinRow, SwitchRow};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -23,29 +23,49 @@ enum Phase {
     Done,
 }
 
-struct TimerPreset {
-    label: &'static str,
-    rounds: i64,
-    round_seconds: i64,
-    pause_seconds: i64,
-    /// Custom per-round work/rest (overrides rounds/round_seconds).
-    per_round: Option<&'static [(i64, i64)]>,
+/// The built-in presets that ship with the app.
+fn builtin_presets() -> Vec<TimerPresetEntry> {
+    let simple =
+        |name: &str, rounds: i64, round_seconds: i64, pause_seconds: i64| TimerPresetEntry {
+            name: name.to_string(),
+            config: RoundConfig {
+                rounds,
+                round_seconds,
+                pause_seconds,
+                prep_seconds: 0,
+                warmup: false,
+                per_round: None,
+                title: String::new(),
+            },
+        };
+    vec![
+        simple("Boxing 3 × 3min", 3, 180, 60),
+        simple("Tabata 8 × 20/10", 8, 20, 10),
+        simple("HIIT 10 × 30/30", 10, 30, 30),
+        simple("Endurance 5 × 5min", 5, 300, 60),
+        simple("Pomodoro 25/5", 4, 1500, 300),
+        TimerPresetEntry {
+            name: "Pyramid 20/40/60".to_string(),
+            config: RoundConfig {
+                rounds: 3,
+                round_seconds: 20,
+                pause_seconds: 10,
+                prep_seconds: 0,
+                warmup: false,
+                per_round: Some(
+                    [(20, 10), (40, 10), (60, 0)]
+                        .iter()
+                        .map(|(work, rest)| crate::models::RoundSpec {
+                            work_seconds: *work,
+                            rest_seconds: *rest,
+                        })
+                        .collect(),
+                ),
+                title: String::new(),
+            },
+        },
+    ]
 }
-
-const TIMER_PRESETS: &[TimerPreset] = &[
-    TimerPreset { label: "Boxing 3 × 3min", rounds: 3, round_seconds: 180, pause_seconds: 60, per_round: None },
-    TimerPreset { label: "Tabata 8 × 20/10", rounds: 8, round_seconds: 20, pause_seconds: 10, per_round: None },
-    TimerPreset { label: "HIIT 10 × 30/30", rounds: 10, round_seconds: 30, pause_seconds: 30, per_round: None },
-    TimerPreset { label: "Endurance 5 × 5min", rounds: 5, round_seconds: 300, pause_seconds: 60, per_round: None },
-    TimerPreset { label: "Pomodoro 25/5", rounds: 4, round_seconds: 1500, pause_seconds: 300, per_round: None },
-    TimerPreset {
-        label: "Pyramid 20/40/60",
-        rounds: 3,
-        round_seconds: 20,
-        pause_seconds: 10,
-        per_round: Some(&[(20, 10), (40, 10), (60, 0)]),
-    },
-];
 
 pub struct RoundTimerPage {
     widget: Bin,
@@ -77,7 +97,8 @@ pub struct RoundTimerPage {
     pause_btn: Button,
     reset_btn: Button,
     skip_btn: Button,
-    preset_btns: Vec<Button>,
+    favorite_preset_btn: Button,
+    presets_btn: Button,
 }
 
 impl RoundTimerPage {
@@ -189,19 +210,18 @@ impl RoundTimerPage {
 
         main_box.append(&config_group);
 
-        // Quick presets
+        // Quick presets: the favorite as a pill + a submenu with all presets.
         let preset_box = GtkBox::new(Orientation::Horizontal, 8);
         preset_box.set_halign(Align::Center);
         preset_box.set_margin_top(4);
-        let mut preset_btns = Vec::new();
-        for preset in TIMER_PRESETS {
-            let btn = Button::builder()
-                .label(preset.label)
-                .css_classes(["pill"])
-                .build();
-            preset_box.append(&btn);
-            preset_btns.push(btn);
-        }
+        let favorite_preset_btn = Button::builder().css_classes(["pill"]).build();
+        favorite_preset_btn.set_visible(false);
+        preset_box.append(&favorite_preset_btn);
+        let presets_btn = Button::builder()
+            .label("Presets…")
+            .css_classes(["pill"])
+            .build();
+        preset_box.append(&presets_btn);
         main_box.append(&preset_box);
 
         // Scrollable so the page never overflows on short windows.
@@ -249,43 +269,35 @@ impl RoundTimerPage {
             pause_btn: pause_btn.clone(),
             reset_btn: reset_btn.clone(),
             skip_btn: skip_btn.clone(),
-            preset_btns,
+            favorite_preset_btn: favorite_preset_btn.clone(),
+            presets_btn: presets_btn.clone(),
         });
 
-        // Preset chips fill the spin rows
-        for (btn, preset) in page.preset_btns.iter().zip(TIMER_PRESETS) {
+        // The favorite pill applies the favorite preset.
+        {
             let page_weak = Rc::downgrade(&page);
-            let (rounds, round_s, pause_s) =
-                (preset.rounds, preset.round_seconds, preset.pause_seconds);
-            let per_round: Option<Vec<crate::models::RoundSpec>> = preset.per_round.map(|list| {
-                list.iter()
-                    .map(|(work, rest)| crate::models::RoundSpec {
-                        work_seconds: *work,
-                        rest_seconds: *rest,
-                    })
-                    .collect()
-            });
-            btn.connect_clicked(move |_| {
+            favorite_preset_btn.connect_clicked(move |_| {
                 if let Some(p) = page_weak.upgrade() {
-                    if p.rounds_spin.is_sensitive() {
-                        p.rounds_spin.set_value(rounds as f64);
-                        p.round_time_spin.set_value(round_s as f64);
-                        p.pause_time_spin.set_value(pause_s as f64);
-                        match &per_round {
-                            Some(specs) => {
-                                *p.per_round.borrow_mut() = specs.clone();
-                                p.custom_switch.set_active(true);
-                            }
-                            None => {
-                                p.custom_switch.set_active(false);
-                            }
-                        }
-                        p.rebuild_custom_rounds();
-                        p.sync_config_from_widgets();
+                    let settings = load_settings();
+                    if let Some(preset) = p.find_preset(&settings, &settings.favorite_preset) {
+                        p.apply_preset(&preset.config);
                     }
                 }
             });
         }
+
+        // The Presets button opens the preset submenu dialog.
+        {
+            let page_weak = Rc::downgrade(&page);
+            presets_btn.connect_clicked(move |_| {
+                if let Some(p) = page_weak.upgrade() {
+                    p.show_presets_dialog();
+                }
+            });
+        }
+
+        // Reflect the persisted favorite on the pill.
+        page.refresh_favorite_pill();
 
         // Apply the restored configuration to the widgets.
         {
@@ -370,16 +382,15 @@ impl RoundTimerPage {
         }
 
         {
-            let presets: Vec<gtk4::Widget> = page.preset_btns
-                .iter()
-                .map(|b| b.clone().upcast::<gtk4::Widget>())
-                .collect();
             let mut initial: Vec<gtk4::Widget> = vec![
                 rounds_spin.clone().upcast(),
                 round_time_spin.clone().upcast(),
                 pause_time_spin.clone().upcast(),
             ];
-            initial.extend(presets);
+            if page.favorite_preset_btn.is_visible() {
+                initial.push(page.favorite_preset_btn.clone().upcast());
+            }
+            initial.push(page.presets_btn.clone().upcast());
             initial.extend(vec![
                 start_btn.clone().upcast(),
                 pause_btn.clone().upcast(),
@@ -394,6 +405,253 @@ impl RoundTimerPage {
 
     pub fn widget(&self) -> &Bin {
         &self.widget
+    }
+
+    /// Find a preset by name (builtin or user-saved).
+    fn find_preset(
+        &self,
+        settings: &crate::settings::AppSettings,
+        name: &str,
+    ) -> Option<TimerPresetEntry> {
+        if name.is_empty() {
+            return None;
+        }
+        builtin_presets()
+            .into_iter()
+            .chain(settings.timer_presets.iter().cloned())
+            .find(|p| p.name == name)
+    }
+
+    /// Apply a preset config to the widgets and persist it.
+    fn apply_preset(self: &Rc<Self>, config: &RoundConfig) {
+        if !self.rounds_spin.is_sensitive() {
+            return;
+        }
+        self.apply_config_to_widgets(config);
+        self.custom_rounds_box
+            .set_visible(self.custom_switch.is_active());
+        self.sync_config_from_widgets();
+    }
+
+    /// Show/hide the favorite pill to match the persisted favorite.
+    fn refresh_favorite_pill(&self) {
+        let settings = load_settings();
+        let exists = self
+            .find_preset(&settings, &settings.favorite_preset)
+            .is_some();
+        self.favorite_preset_btn.set_visible(exists);
+        if exists {
+            self.favorite_preset_btn
+                .set_label(&settings.favorite_preset);
+        }
+    }
+
+    /// Set (or clear with an empty name) the favorite preset and persist it.
+    fn set_favorite_preset(&self, name: &str) {
+        let mut settings = load_settings();
+        settings.favorite_preset = name.to_string();
+        save_settings(&settings);
+        self.refresh_favorite_pill();
+    }
+
+    /// The presets submenu: all builtin + custom presets, favorite toggle,
+    /// delete for custom ones, and adding a new preset from the current config.
+    fn show_presets_dialog(self: &Rc<Self>) {
+        let dialog = Dialog::new();
+        dialog.set_title("Timer Presets");
+        dialog.set_content_width(420);
+        dialog.set_follows_content_size(true);
+
+        let content = GtkBox::new(Orientation::Vertical, 12);
+        content.set_margin_top(12);
+        content.set_margin_bottom(12);
+        content.set_margin_start(12);
+        content.set_margin_end(12);
+
+        let list = ListBox::builder()
+            .css_classes(["boxed-list"])
+            .selection_mode(gtk4::SelectionMode::None)
+            .build();
+
+        let settings = load_settings();
+        let favorite = settings.favorite_preset.clone();
+        let all: Vec<TimerPresetEntry> = builtin_presets()
+            .into_iter()
+            .chain(settings.timer_presets.iter().cloned())
+            .collect();
+
+        for preset in &all {
+            let row = ActionRow::builder()
+                .title(&preset.name)
+                .subtitle(&preset_summary(&preset.config))
+                .activatable(true)
+                .build();
+
+            let star_icon = if preset.name == favorite {
+                "star-filled-rounded-symbolic"
+            } else {
+                "star-outline-rounded-symbolic"
+            };
+            let star = Button::builder()
+                .icon_name(star_icon)
+                .css_classes(["flat"])
+                .valign(Align::Center)
+                .tooltip_text("Favorite")
+                .build();
+            {
+                let page_weak = Rc::downgrade(self);
+                let name = preset.name.clone();
+                let is_favorite = preset.name == favorite;
+                let dlg = dialog.clone();
+                star.connect_clicked(move |_| {
+                    if let Some(p) = page_weak.upgrade() {
+                        if is_favorite {
+                            p.set_favorite_preset("");
+                        } else {
+                            p.set_favorite_preset(&name);
+                        }
+                        dlg.close();
+                    }
+                });
+            }
+            row.add_suffix(&star);
+
+            let is_custom = settings.timer_presets.iter().any(|p| p.name == preset.name);
+            if is_custom {
+                let delete = Button::builder()
+                    .icon_name("user-trash-symbolic")
+                    .css_classes(["flat"])
+                    .valign(Align::Center)
+                    .tooltip_text("Delete preset")
+                    .build();
+                {
+                    let page_weak = Rc::downgrade(self);
+                    let name = preset.name.clone();
+                    let dlg = dialog.clone();
+                    delete.connect_clicked(move |_| {
+                        if let Some(p) = page_weak.upgrade() {
+                            let mut s = load_settings();
+                            s.timer_presets.retain(|p2| p2.name != name);
+                            if s.favorite_preset == name {
+                                s.favorite_preset.clear();
+                            }
+                            save_settings(&s);
+                            p.refresh_favorite_pill();
+                            dlg.close();
+                        }
+                    });
+                }
+                row.add_suffix(&delete);
+            }
+
+            {
+                let page_weak = Rc::downgrade(self);
+                let config = preset.config.clone();
+                let dlg = dialog.clone();
+                row.connect_activated(move |_| {
+                    if let Some(p) = page_weak.upgrade() {
+                        p.apply_preset(&config);
+                        dlg.close();
+                    }
+                });
+            }
+            list.append(&row);
+        }
+
+        let scrolled = ScrolledWindow::new();
+        scrolled.set_vexpand(true);
+        scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+        scrolled.set_child(Some(&list));
+        content.append(&scrolled);
+
+        let add_btn = Button::builder()
+            .label("Save current setup as preset…")
+            .css_classes(["suggested-action"])
+            .halign(Align::Center)
+            .build();
+        {
+            let page_weak = Rc::downgrade(self);
+            let dlg = dialog.clone();
+            add_btn.connect_clicked(move |_| {
+                if let Some(p) = page_weak.upgrade() {
+                    dlg.close();
+                    p.show_save_preset_dialog();
+                }
+            });
+        }
+        content.append(&add_btn);
+
+        dialog.set_child(Some(&content));
+        if let Some(root) = self
+            .widget
+            .root()
+            .and_then(|r| r.dynamic_cast_ref::<gtk4::Window>().cloned())
+        {
+            dialog.present(Some(&root));
+        }
+    }
+
+    /// Save the current widget state as a named custom preset.
+    fn save_preset(self: &Rc<Self>, name: &str) {
+        self.sync_config_from_widgets();
+        let config = self.config.borrow().clone();
+        let mut settings = load_settings();
+        settings.timer_presets.retain(|p| p.name != name);
+        settings.timer_presets.push(TimerPresetEntry {
+            name: name.to_string(),
+            config,
+        });
+        save_settings(&settings);
+    }
+
+    /// Ask for a name and save the current timer setup as a custom preset.
+    fn show_save_preset_dialog(self: &Rc<Self>) {
+        let dialog = Dialog::new();
+        dialog.set_title("Save Preset");
+        dialog.set_content_width(360);
+        dialog.set_follows_content_size(true);
+
+        let content = GtkBox::new(Orientation::Vertical, 12);
+        content.set_margin_top(12);
+        content.set_margin_bottom(12);
+        content.set_margin_start(12);
+        content.set_margin_end(12);
+
+        let name_entry = EntryRow::builder()
+            .title("Preset name")
+            .show_apply_button(false)
+            .build();
+        content.append(&name_entry);
+
+        let save_btn = Button::builder()
+            .label("Save")
+            .css_classes(["suggested-action"])
+            .halign(Align::Center)
+            .build();
+        {
+            let page_weak = Rc::downgrade(self);
+            let entry = name_entry.clone();
+            let dlg = dialog.clone();
+            save_btn.connect_clicked(move |_| {
+                if let Some(p) = page_weak.upgrade() {
+                    let name = entry.text().trim().to_string();
+                    if !name.is_empty() {
+                        p.save_preset(&name);
+                    }
+                    dlg.close();
+                }
+            });
+        }
+        content.append(&save_btn);
+
+        dialog.set_child(Some(&content));
+        if let Some(root) = self
+            .widget
+            .root()
+            .and_then(|r| r.dynamic_cast_ref::<gtk4::Window>().cloned())
+        {
+            dialog.present(Some(&root));
+        }
     }
 
     fn add_spin_row(
@@ -863,8 +1121,8 @@ impl RoundTimerPage {
                 widgets.push(w.clone());
             }
         }
-        for btn in &self.preset_btns {
-            if btn.is_sensitive() {
+        for btn in [&self.favorite_preset_btn, &self.presets_btn] {
+            if btn.is_sensitive() && btn.is_visible() {
                 widgets.push(btn.clone().upcast());
             }
         }
@@ -969,5 +1227,24 @@ impl RoundTimerPage {
 fn format_time(seconds: f64) -> String {
     let total = (seconds.max(0.0)) as i64;
     format!("{:02}:{:02}", total / 60, total % 60)
+}
+
+/// Short human-readable summary of a preset config for the dialog rows.
+fn preset_summary(config: &RoundConfig) -> String {
+    match &config.per_round {
+        Some(specs) => format!(
+            "{} rounds \u{00b7} {}",
+            specs.len(),
+            specs
+                .iter()
+                .map(|s| format!("{}/{}", s.work_seconds, s.rest_seconds))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ),
+        None => format!(
+            "{} rounds \u{00b7} {}/{}",
+            config.rounds, config.round_seconds, config.pause_seconds
+        ),
+    }
 }
 

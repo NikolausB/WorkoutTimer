@@ -74,6 +74,12 @@ pub struct AppSettings {
     /// Round timer configuration (kept across restarts).
     #[serde(default)]
     pub timer_config: Option<crate::models::RoundConfig>,
+    /// User-saved round-timer presets.
+    #[serde(default)]
+    pub timer_presets: Vec<crate::models::TimerPresetEntry>,
+    /// Name of the preset shown as the favorite pill (empty = none).
+    #[serde(default)]
+    pub favorite_preset: String,
     /// Set once the user finished the first-run wizard.
     #[serde(default)]
     pub onboarding_done: bool,
@@ -144,6 +150,8 @@ impl Default for AppSettings {
             window_width: 0,
             window_height: 0,
             timer_config: None,
+            timer_presets: Vec::new(),
+            favorite_preset: String::new(),
             onboarding_done: false,
         }
     }
