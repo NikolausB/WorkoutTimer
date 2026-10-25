@@ -462,6 +462,22 @@ impl RoundTimerPage {
         dialog.set_content_width(420);
         dialog.set_follows_content_size(true);
 
+        // The save dialog can only be presented once this one has fully
+        // closed (Adw.Dialog close is asynchronous).
+        let requested_save = Rc::new(Cell::new(false));
+        {
+            let page_weak = Rc::downgrade(self);
+            let requested_save = Rc::clone(&requested_save);
+            dialog.connect_closed(move |_| {
+                if requested_save.get() {
+                    requested_save.set(false);
+                    if let Some(p) = page_weak.upgrade() {
+                        p.show_save_preset_dialog();
+                    }
+                }
+            });
+        }
+
         let content = GtkBox::new(Orientation::Vertical, 12);
         content.set_margin_top(12);
         content.set_margin_bottom(12);
@@ -488,9 +504,9 @@ impl RoundTimerPage {
                 .build();
 
             let star_icon = if preset.name == favorite {
-                "star-filled-rounded-symbolic"
+                "starred-symbolic"
             } else {
-                "star-outline-rounded-symbolic"
+                "non-starred-symbolic"
             };
             let star = Button::builder()
                 .icon_name(star_icon)
@@ -570,13 +586,11 @@ impl RoundTimerPage {
             .halign(Align::Center)
             .build();
         {
-            let page_weak = Rc::downgrade(self);
             let dlg = dialog.clone();
+            let requested_save = Rc::clone(&requested_save);
             add_btn.connect_clicked(move |_| {
-                if let Some(p) = page_weak.upgrade() {
-                    dlg.close();
-                    p.show_save_preset_dialog();
-                }
+                requested_save.set(true);
+                dlg.close();
             });
         }
         content.append(&add_btn);
