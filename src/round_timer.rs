@@ -459,8 +459,9 @@ impl RoundTimerPage {
     fn show_presets_dialog(self: &Rc<Self>) {
         let dialog = Dialog::new();
         dialog.set_title("Timer Presets");
-        dialog.set_content_width(420);
-        dialog.set_follows_content_size(true);
+        dialog.set_content_width(480);
+        dialog.set_content_height(520);
+        dialog.set_follows_content_size(false);
 
         // The save dialog can only be presented once this one has fully
         // closed (Adw.Dialog close is asynchronous).
@@ -484,19 +485,56 @@ impl RoundTimerPage {
         content.set_margin_start(12);
         content.set_margin_end(12);
 
-        let list = ListBox::builder()
+        let scrolled = ScrolledWindow::new();
+        scrolled.set_vexpand(true);
+        scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+
+        let list_box = GtkBox::new(Orientation::Vertical, 18);
+        list_box.set_margin_top(6);
+        list_box.set_margin_bottom(6);
+        scrolled.set_child(Some(&list_box));
+        content.append(&scrolled);
+
+        let settings = load_settings();
+        let favorite = settings.favorite_preset.clone();
+        let builtins = builtin_presets();
+        let customs: Vec<TimerPresetEntry> = settings.timer_presets.clone();
+
+        let section_label = |text: &str| {
+            let lbl = Label::new(Some(text));
+            lbl.add_css_class("heading");
+            lbl.set_halign(Align::Start);
+            lbl.set_margin_start(6);
+            lbl
+        };
+
+        list_box.append(&section_label("Built-in presets"));
+
+        let builtin_list = ListBox::builder()
+            .css_classes(["boxed-list"])
+            .selection_mode(gtk4::SelectionMode::None)
+            .build();
+        list_box.append(&builtin_list);
+
+        let custom_list = ListBox::builder()
             .css_classes(["boxed-list"])
             .selection_mode(gtk4::SelectionMode::None)
             .build();
 
-        let settings = load_settings();
-        let favorite = settings.favorite_preset.clone();
-        let all: Vec<TimerPresetEntry> = builtin_presets()
-            .into_iter()
-            .chain(settings.timer_presets.iter().cloned())
-            .collect();
+        if customs.is_empty() {
+            let empty = Label::new(Some(
+                "No custom presets yet \u{2014} save your current setup below.",
+            ));
+            empty.add_css_class("dim-label");
+            empty.set_halign(Align::Start);
+            empty.set_margin_start(6);
+            list_box.append(&empty);
+        } else {
+            list_box.append(&section_label("My presets"));
+            list_box.append(&custom_list);
+        }
 
-        for preset in &all {
+        for preset in builtins.iter().chain(customs.iter()) {
             let row = ActionRow::builder()
                 .title(&preset.name)
                 .subtitle(&preset_summary(&preset.config))
@@ -571,14 +609,12 @@ impl RoundTimerPage {
                     }
                 });
             }
-            list.append(&row);
+            if is_custom {
+                custom_list.append(&row);
+            } else {
+                builtin_list.append(&row);
+            }
         }
-
-        let scrolled = ScrolledWindow::new();
-        scrolled.set_vexpand(true);
-        scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
-        scrolled.set_child(Some(&list));
-        content.append(&scrolled);
 
         let add_btn = Button::builder()
             .label("Save current setup as preset…")
@@ -594,6 +630,19 @@ impl RoundTimerPage {
             });
         }
         content.append(&add_btn);
+
+        let back_btn = Button::builder()
+            .label("Back")
+            .halign(Align::Center)
+            .css_classes(["flat"])
+            .build();
+        {
+            let dlg = dialog.clone();
+            back_btn.connect_clicked(move |_| {
+                dlg.close();
+            });
+        }
+        content.append(&back_btn);
 
         dialog.set_child(Some(&content));
         if let Some(root) = self
