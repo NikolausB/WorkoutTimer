@@ -38,7 +38,7 @@ jobs:
           --disable-rofiles-fuse
           io.github.NikolausB.WorkoutTimer.yml
       - name: Install the app
-        run: flatpak install --user -y --noninteractive repo io.github.NikolausB.WorkoutTimer
+        run: flatpak install --user -y --noninteractive ./repo io.github.NikolausB.WorkoutTimer
       - name: Materialize the offline cargo home
         run: python3 .github/scripts/materialize-cargo-home.py cargo-sources.json .ci-cargo
       - name: Run cargo test in the SDK sandbox
