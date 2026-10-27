@@ -67,7 +67,7 @@ Removed options (not loaded/saved): `show_exercise_images`, `fullscreen_mode`.
 
 - `src/progress_ring.rs`: cairo circular progress ring (runner + round timer), phase colors, `set_dimmed` for paused state.
 - `src/bar_chart.rs`: cairo bar chart used by the history page (range toggle 8 weeks/12 months × metric toggle time/volume/sessions).
-- `src/analytics.rs`: pure training analytics — Epley 1RM, volume load, work seconds, adherence, per-exercise personal records (`exercise_stats`), weekly buckets and `progressed_plan` (progressive overload: +1 rep / +2.5 kg / +5 s for completed exercises).
+- `src/analytics.rs`: pure training analytics — Epley 1RM, volume load, work seconds, adherence, per-exercise personal records (`exercise_stats`), weekly buckets and `progressed_plan` (progressive overload: +50% reps / +25% weight / +50% duration for completed exercises; an exercise bumps the first matching dimension in that order — a rep+weight exercise only gains reps).
 - `src/backup.rs`: whole-data backup/restore, merge-by-id semantics.
 - `src/help_page.rs`: "Help & Shortcuts" window; the controller hint strings live in `src/controller_hints.rs::hints_for` (single source of truth for the hint bar and the help page).
 - `src/onboarding.rs`: first-run wizard (goal/equipment/frequency) that adds matching starter plans; `settings.onboarding_done` marks it as done. The bundled default plans are only auto-seeded once the wizard ran.

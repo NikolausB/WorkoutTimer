@@ -265,33 +265,31 @@ pub fn progressed_plan(plan: &TrainingPlan, last_session: &TrainingSession) -> T
             continue;
         };
 
-        // Rep-based exercises: add a rep.
+        // Rep-based exercises: +50% reps (rounded up).
         if let Some(reps) = exercise.reps {
             let done = log.actual_reps.or(log.planned_reps).unwrap_or(0);
             if done > 0 {
-                exercise.reps = Some(reps + 1);
+                exercise.reps = Some(((reps as f64) * 1.5).ceil() as i64);
                 continue;
             }
         }
 
-        // Weighted exercises: add a bit of load.
+        // Weighted exercises: +25% load (rounded to 0.1 kg).
         if let Some(weight) = exercise.weight_kg {
             if weight > 0.0 {
-                let step = if weight < 20.0 { weight * 0.025 } else { 2.5 };
-                let new_weight = (weight + step * 10.0).round() / 10.0;
-                exercise.weight_kg = Some(new_weight);
+                exercise.weight_kg = Some(((weight * 1.25) * 10.0).round() / 10.0);
                 continue;
             }
         }
 
-        // Timed exercises: add seconds.
+        // Timed exercises: +50% duration (rounded up to seconds).
         if let Some(duration) = exercise.duration_seconds {
             let done = log
                 .actual_duration_seconds
                 .or(log.planned_duration_seconds)
                 .unwrap_or(0);
             if done > 0 {
-                exercise.duration_seconds = Some(duration + 5);
+                exercise.duration_seconds = Some(((duration as f64) * 1.5).ceil() as i64);
             }
         }
     }
@@ -409,7 +407,8 @@ mod tests {
         plan.exercises[0].weight_kg = None;
         let s = session("Push", vec![log("Pushups", Some(10), None, true)]);
         let progressed = progressed_plan(&plan, &s);
-        assert_eq!(progressed.exercises[0].reps, Some(11));
+        // 10 reps -> +50% = 15
+        assert_eq!(progressed.exercises[0].reps, Some(15));
         assert_ne!(progressed.id, plan.id);
         assert!(progressed.name.ends_with("(progression)"));
     }
@@ -443,10 +442,58 @@ mod tests {
         plan.exercises[0].weight_kg = Some(40.0);
         let s = session("Lift", vec![log("Squat", Some(5), Some(40.0), true)]);
         let progressed = progressed_plan(&plan, &s);
-        // completed: +1 rep
-        assert_eq!(progressed.exercises[0].reps, Some(6));
+        // completed: rep-based exercises bump the reps dimension
+        // first (+50%: 5 -> 8), the weight stays untouched
+        assert_eq!(progressed.exercises[0].reps, Some(8));
+        assert_eq!(progressed.exercises[0].weight_kg, Some(40.0));
         // not completed: unchanged
         assert_eq!(progressed.exercises[1].reps, Some(10));
+    }
+
+    #[test]
+    fn progression_bumps_weight_only_and_timed_exercises() {
+        let plan = TrainingPlan {
+            name: "Mixed".to_string(),
+            exercises: vec![
+                Exercise {
+                    name: "Carry".to_string(),
+                    reps: None,
+                    weight_kg: Some(20.0),
+                    duration_seconds: None,
+                    rest_seconds: 60,
+                    image_path: None,
+                    sets: 1,
+                },
+                Exercise {
+                    name: "Plank".to_string(),
+                    reps: None,
+                    weight_kg: None,
+                    duration_seconds: Some(40),
+                    rest_seconds: 30,
+                    image_path: None,
+                    sets: 1,
+                },
+            ],
+            ..Default::default()
+        };
+        let s = session(
+            "Mixed",
+            vec![
+                log("Carry", None, Some(20.0), true),
+                ExerciseLog {
+                    exercise_name: "Plank".to_string(),
+                    planned_duration_seconds: Some(40),
+                    actual_duration_seconds: Some(40),
+                    completed: true,
+                    ..log("Plank", None, None, true)
+                },
+            ],
+        );
+        let progressed = progressed_plan(&plan, &s);
+        // weight-only: +25% (20 -> 25.0)
+        assert_eq!(progressed.exercises[0].weight_kg, Some(25.0));
+        // timed: +50% (40 -> 60)
+        assert_eq!(progressed.exercises[1].duration_seconds, Some(60));
     }
 
     #[test]

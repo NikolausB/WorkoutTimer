@@ -462,7 +462,8 @@ mod ui_tests {
                 }],
             };
             let progressed = crate::analytics::progressed_plan(&plan, &session);
-            assert_eq!(progressed.exercises[0].reps, Some(11));
+            // 10 reps -> +50% = 15
+            assert_eq!(progressed.exercises[0].reps, Some(15));
             assert_ne!(progressed.id, plan.id);
 
             // The stats must find the personal record.
@@ -1356,8 +1357,8 @@ mod ui_tests {
                 .expect("the progression must keep the exercises");
             assert_eq!(
                 pushups.reps,
-                Some(11),
-                "progression must bump the completed exercise by one rep"
+                Some(15),
+                "progression must bump the completed exercise by 50% reps"
             );
         }
 
