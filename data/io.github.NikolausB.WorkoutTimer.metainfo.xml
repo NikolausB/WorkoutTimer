@@ -91,6 +91,29 @@
     <keyword>ai</keyword>
   </keywords>
   <releases>
+    <release version="1.4.1" date="2026-10-27">
+      <description>
+        <p>
+          Controller and preset polish for Steam Deck and desktop gamepads.
+        </p>
+        <ul>
+          <li>Round timer: mark multiple favorite presets, delete custom presets, and save the current setup as a named custom preset with quick-start pills</li>
+          <li>Training plans: favorites are pinned to the top of the list, X toggles the favorite star, Y duplicates a plan, R2 creates a progression copy</li>
+          <li>Progression copies are percentage-based: +50% reps, +25% weight or +50% duration for everything completed last time</li>
+          <li>Gamepad: analog trigger support, L3 opens the Help window, R3 opens Preferences from any page, A toggles switches in the editor and activates Pause/+30s/Skip in the runner</li>
+          <li>Runner hints now show the B button "Stop Training" shortcut</li>
+        </ul>
+        <p>
+          Fixes:
+        </p>
+        <ul>
+          <li>The plans list refreshes whenever the page becomes visible again (edits, favorites and progressions show up immediately)</li>
+          <li>Gamepad focus works in the round timer setup, the presets dialog, the editor switches and the runner buttons</li>
+          <li>Favorite toggling no longer visually duplicates plans in the overview</li>
+          <li>Fixed crashes when leaving a running training and when opening exercise submenus with the controller</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.4.0" date="2026-10-20">
       <description>
         <p>
