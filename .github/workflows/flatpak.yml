@@ -24,12 +24,13 @@ jobs:
           org.freedesktop.Sdk.Extension.rust-stable//26.08
           org.flatpak.Builder
       # flathub-build bundles a current flatpak-builder + flatpak; the runner's
-      # apt flatpak is too old for the --device-if conditional (flatpak 1.17+)
+      # apt flatpak is too old for the --device-if conditional (flatpak 1.17+).
+      # The wrapper supplies its own builddir/repo/force-clean, so only pass
+      # options and the manifest.
       - name: Build and install the app
         run: >
           flatpak run --command=flathub-build org.flatpak.Builder
-          --install -y --force-clean
-          --repo=test-repo build-dir/ io.github.NikolausB.WorkoutTimer.yml
+          --install -y io.github.NikolausB.WorkoutTimer.yml
       - name: Materialize the offline cargo home
         run: python3 .github/scripts/materialize-cargo-home.py cargo-sources.json .ci-cargo
       - name: Run cargo test in the SDK sandbox
@@ -65,7 +66,7 @@ jobs:
           org.freedesktop.Sdk.Extension.rust-stable//26.08
           org.flatpak.Builder
       - name: Build
-        run: flatpak run --command=flathub-build org.flatpak.Builder --force-clean --repo=repo build-dir/ io.github.NikolausB.WorkoutTimer.yml
+        run: flatpak run --command=flathub-build org.flatpak.Builder io.github.NikolausB.WorkoutTimer.yml
       - name: Lint manifest
         run: timeout 300 flatpak run --user --command=flatpak-builder-lint org.flatpak.Builder manifest io.github.NikolausB.WorkoutTimer.yml
         continue-on-error: true
