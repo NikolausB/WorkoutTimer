@@ -625,6 +625,20 @@ impl TrainingPlanPage {
     // ---------- Signals ----------
 
     fn connect_signals(&self, page_weak: std::rc::Weak<TrainingPlanPage>) {
+        // Whenever the list page becomes visible again (e.g. popped to
+        // via the NavigationView back button, which bypasses show_list),
+        // reload the plans so the list reflects edits made in the
+        // editor and finished workouts.
+        {
+            let page_weak = page_weak.clone();
+            self.nav.connect_visible_page_notify(move |_| {
+                let Some(p) = page_weak.upgrade() else { return };
+                if p.visible_page() == "list" {
+                    p.refresh_plans();
+                }
+            });
+        }
+
         // Timer tick
         {
             let page_weak = page_weak.clone();
@@ -2087,6 +2101,13 @@ impl TrainingPlanPage {
             n += 1;
         }
         n
+    }
+
+    /// Pop one nav level without the show_list bookkeeping — used by
+    /// the ui tests to simulate the NavigationView back button.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn nav_pop(&self) -> bool {
+        self.nav.pop()
     }
 
     /// The gamepad focus list of the runner, in visual order — used by

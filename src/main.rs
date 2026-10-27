@@ -1377,7 +1377,10 @@ mod ui_tests {
             std::fs::create_dir_all(&data_dir).unwrap();
             let store = crate::data_store::DataStore::new();
             let plan = test_plan();
+            let mut other = test_plan();
+            other.name = "Aardvark Plan".to_string();
             store.save_plan(&plan);
+            store.save_plan(&other);
             plan.id
         };
 
@@ -1395,7 +1398,9 @@ mod ui_tests {
         }
         assert_eq!(mw.visible_tab(), "plans");
 
-        // One dpad_down: New Plan -> the only plan row; A opens it.
+        // Rows: New Plan, Aardvark Plan, Controller Test Plan — two
+        // dpad_downs focus the test plan; A opens it.
+        mw.on_controller_action("dpad_down");
         mw.on_controller_action("dpad_down");
         mw.on_controller_action("a");
         pump_main_loop(2);
@@ -1430,22 +1435,40 @@ mod ui_tests {
 
         // Walk down to "Save Plan" and press A: the favorite must
         // survive the explicit save.
-        // Focus order: name entry, favorite switch, rounds, rest,
-        // add, browse, 2 exercise rows, Start Training, Save Plan.
-        for _ in 0..7 {
+        // Focus order from the switch: rounds, rest, add, browse,
+        // 2 exercise rows, Start Training, Save Plan -> 8 downs.
+        for _ in 0..8 {
             mw.on_controller_action("dpad_down");
         }
         mw.on_controller_action("a");
         pump_main_loop(2);
+        assert_eq!(
+            mw.training_plan.visible_page(),
+            "editor",
+            "Save Plan must not start a workout"
+        );
         {
             let plans = crate::data_store::DataStore::new().load_plans();
-            assert_eq!(plans.len(), 1, "Save must not create a duplicate plan");
+            assert_eq!(plans.len(), 2, "Save must not create a duplicate plan");
             let plan = plans.iter().find(|p| p.id == plan_id).unwrap();
             assert!(
                 plan.is_favorite,
                 "Save Plan must keep the favorite state"
             );
         }
+
+        // Simulate the NavigationView back button (mouse path): it pops
+        // the nav without going through show_list — the list must still
+        // reload and show the favorited plan at the top.
+        assert!(mw.training_plan.nav_pop(), "pop() must accept the editor page");
+        pump_main_loop(10);
+        assert_eq!(mw.training_plan.visible_page(), "list");
+        assert_eq!(
+            mw.training_plan.plans_order().first().map(|s| s.to_string()),
+            Some(plan_id.clone()),
+            "returning to the list via the back button must reload it"
+        );
+        assert_eq!(mw.training_plan.plans_row_count(), 2);
 
         mw.gtk_window().close();
         })
