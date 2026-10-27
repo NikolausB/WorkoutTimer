@@ -73,12 +73,124 @@ mod ui_tests {
     use gtk4::prelude::*;
     use std::rc::Rc;
 
+    /// GTK and libadwaita require every widget call to happen on one single
+    /// thread, but the cargo test harness runs each test on its own thread.
+    /// All GTK test bodies are therefore marshalled to this dedicated
+    /// thread; panics are caught and re-raised on the calling test thread
+    /// so failures still fail the individual test.
+    struct GtkJob {
+        func: Box<dyn FnOnce() + 'static>,
+        reply: std::sync::mpsc::Sender<Result<(), String>>,
+    }
+    // The job fully owns its Rc's and other non-Send state: they are
+    // created, used and dropped on the GTK thread only, so moving the
+    // closure across the channel is sound.
+    unsafe impl Send for GtkJob {}
+
+    fn gtk_thread() -> &'static std::sync::mpsc::Sender<GtkJob> {
+        static SENDER: std::sync::OnceLock<std::sync::mpsc::Sender<GtkJob>> =
+            std::sync::OnceLock::new();
+        SENDER.get_or_init(|| {
+            let (tx, rx) = std::sync::mpsc::channel::<GtkJob>();
+            std::thread::Builder::new()
+                .name("gtk-test".to_string())
+                .spawn(move || {
+                    gtk4::init().expect("gtk init");
+                    libadwaita::init().expect("adw init");
+                    while let Ok(job) = rx.recv() {
+                        let GtkJob { func, reply } = job;
+                        let result = std::panic::catch_unwind(
+                            std::panic::AssertUnwindSafe(move || func()),
+                        )
+                        .map_err(|payload| {
+                            if let Some(s) = payload.downcast_ref::<&str>() {
+                                (*s).to_string()
+                            } else if let Some(s) = payload.downcast_ref::<String>() {
+                                s.clone()
+                            } else {
+                                "gtk test thread panicked".to_string()
+                            }
+                        });
+                        let _ = reply.send(result);
+                    }
+                })
+                .expect("spawn gtk test thread");
+            tx
+        })
+    }
+
+    fn run_in_gtk<F: FnOnce() + 'static>(body: F) {
+        let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+        gtk_thread()
+            .send(GtkJob {
+                func: Box::new(body),
+                reply: reply_tx,
+            })
+            .expect("gtk test thread gone");
+        match reply_rx.recv() {
+            Ok(Ok(())) => {}
+            Ok(Err(msg)) => panic!("{}", msg),
+            Err(_) => panic!("gtk test thread died"),
+        }
+    }
+
+    /// Isolated data dir: tests never touch the real user data. Only
+    /// meaningful inside `run_in_gtk` bodies, which run one at a time.
+    fn fresh_data_dir() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "workout-timer-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create test data dir");
+        std::env::set_var("TRAINING_DATA_DIR", &dir);
+        dir
+    }
+
+    fn pump_main_loop(iterations: usize) {
+        let ctx = gtk4::glib::MainContext::default();
+        for _ in 0..iterations {
+            while ctx.iteration(false) {}
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+
+    fn test_plan() -> crate::models::TrainingPlan {
+        use crate::models::{Exercise, TrainingPlan};
+        TrainingPlan {
+            name: "Controller Test Plan".to_string(),
+            total_rounds: 1,
+            rest_between_rounds_seconds: 30,
+            exercises: vec![
+                Exercise {
+                    name: "Timed Hold".to_string(),
+                    reps: None,
+                    weight_kg: None,
+                    duration_seconds: Some(3),
+                    rest_seconds: 30,
+                    image_path: None,
+                    sets: 1,
+                },
+                Exercise {
+                    name: "Pushups".to_string(),
+                    reps: Some(10),
+                    weight_kg: None,
+                    duration_seconds: None,
+                    rest_seconds: 30,
+                    image_path: None,
+                    sets: 1,
+                },
+            ],
+            ..Default::default()
+        }
+    }
+
     /// GTK can only be initialized once per process, so all widget smoke
     /// checks live in a single test: construct every page and exercise the
     /// main refresh paths.
     #[test]
     fn ui_smoke_all() {
-        gtk4::init().expect("gtk init");
+        run_in_gtk(|| {
+        let _data_dir = fresh_data_dir();
         let store = Rc::new(crate::data_store::DataStore::new());
 
         let home = crate::home::HomePage::new(store.clone(), Rc::new(|_| {}));
@@ -89,6 +201,7 @@ mod ui_tests {
 
         let plans =
             crate::training_plan::TrainingPlanPage::new(store.clone(), Rc::new(crate::sound::SoundPlayer::new()));
+        store.save_plan(&test_plan());
         plans.refresh_plans();
         if let Some(plan) = store.load_plans().into_iter().next() {
             plans.start_training(&plan);
@@ -357,6 +470,300 @@ mod ui_tests {
             assert_eq!(stats.len(), 1);
             assert_eq!(stats[0].best_reps, 10);
         }
+        })
+    }
+
+    /// Controller regression test: editor exercise sub-rows, the round timer
+    /// focus list and the runner quit flow must not crash.
+    #[test]
+    fn controller_flows() {
+        run_in_gtk(|| {
+        let _data_dir = fresh_data_dir();
+        use libadwaita::prelude::*;
+
+        let store = Rc::new(crate::data_store::DataStore::new());
+        let plan = test_plan();
+        store.save_plan(&plan);
+
+        let plans =
+            crate::training_plan::TrainingPlanPage::new(store.clone(), Rc::new(crate::sound::SoundPlayer::new()));
+        plans.refresh_plans();
+
+        // Host the page in a real window so dialogs can present.
+        let host = gtk4::Window::new();
+        host.set_child(Some(plans.widget()));
+        host.present();
+
+        // --- Editor: open, expand the exercise sub-rows, adjust, collapse ---
+        plans.show_editor(Some(&plan));
+        assert_eq!(plans.visible_page(), "editor");
+        pump_main_loop(3);
+        // Walk the whole focus list so every widget is focused once.
+        for _ in 0..40 {
+            plans.controller_dpad_down();
+        }
+        plans.controller_x(); // collapse a focused expander
+        for _ in 0..40 {
+            plans.controller_dpad_up();
+        }
+        pump_main_loop(3);
+
+        // --- Runner: start, then quit via B + confirm dialog ---
+        plans.controller_b(); // editor -> back to list
+        assert_eq!(plans.visible_page(), "list");
+        plans.start_training(&plan);
+        assert_eq!(plans.visible_page(), "runner");
+        pump_main_loop(2);
+
+        let captured: Rc<std::cell::RefCell<Option<(Rc<libadwaita::AlertDialog>, String)>>> =
+            Rc::new(std::cell::RefCell::new(None));
+        let captured_clone = captured.clone();
+        plans.set_dialog_registrar(Rc::new(move |dlg| {
+            *captured_clone.borrow_mut() = dlg;
+        }));
+
+        plans.controller_b(); // runner -> "End Training?" dialog
+        pump_main_loop(2);
+        let (dlg, confirm_id) = captured.borrow().clone().expect("quit dialog was not registered");
+        assert_eq!(confirm_id, "end");
+
+        // Confirm, exactly like the window's controller dialog handling.
+        dlg.set_close_response(&confirm_id);
+        dlg.close();
+        pump_main_loop(5);
+
+        assert_eq!(
+            plans.visible_page(),
+            "summary",
+            "confirming End Training must land on the summary page"
+        );
+        // Back from summary to the list must work too.
+        plans.controller_b();
+        assert_eq!(plans.visible_page(), "list");
+        pump_main_loop(3);
+
+        // --- Runner: reps exercise, focus over every widget, quit at rest ---
+        let reps_plan = crate::models::TrainingPlan {
+            name: "Reps Plan".to_string(),
+            exercises: vec![crate::models::Exercise {
+                name: "Pushups".to_string(),
+                reps: Some(10),
+                weight_kg: None,
+                duration_seconds: None,
+                rest_seconds: 30,
+                image_path: None,
+                sets: 1,
+            }],
+            ..Default::default()
+        };
+        store.save_plan(&reps_plan);
+        plans.refresh_plans();
+        plans.start_training(&reps_plan);
+        pump_main_loop(2);
+        // Cycle through every runner widget, incl. the reps spin row.
+        for _ in 0..10 {
+            plans.controller_dpad_down();
+            plans.controller_dpad_right();
+            plans.controller_dpad_left();
+        }
+        plans.controller_a(); // mark the exercise done -> rest phase
+        pump_main_loop(3);
+        assert_eq!(plans.visible_page(), "runner");
+
+        plans.controller_b(); // quit dialog
+        pump_main_loop(2);
+        let (dlg, confirm_id) = captured.borrow().clone().expect("second quit dialog");
+        dlg.set_close_response(&confirm_id);
+        dlg.close();
+        pump_main_loop(5);
+        assert_eq!(plans.visible_page(), "summary");
+        plans.controller_b();
+
+        host.close();
+        })
+    }
+
+    /// The round timer's gamepad focus list must contain every config row
+    /// at idle, A must activate the focused widget (open the presets
+    /// dialog) instead of starting the timer, and the presets dialog
+    /// itself must be navigable and close when a preset is applied.
+    #[test]
+    fn round_timer_controller_access() {
+        run_in_gtk(|| {
+        use std::cell::RefCell;
+        let _data_dir = fresh_data_dir();
+
+        let timer = crate::round_timer::RoundTimerPage::new(Rc::new(
+            crate::sound::SoundPlayer::new(),
+        ));
+
+        // The presets dialog is presented on the page's root window and
+        // only reports "closed" once it was presented.
+        let win = gtk4::Window::new();
+        win.set_child(Some(timer.widget()));
+        win.present();
+        pump_main_loop(2);
+
+        // Capture the presets-dialog registration like MainWindow does.
+        let registered: Rc<RefCell<Option<Rc<crate::round_timer::PresetsDialogController>>>> =
+            Rc::new(RefCell::new(None));
+        {
+            let registered = Rc::clone(&registered);
+            timer.set_presets_dialog_registrar(Rc::new(move |c| {
+                *registered.borrow_mut() = c;
+            }));
+        }
+
+        // Regression: the config rows (rounds / round time / pause /
+        // prepare spins, warm-up + custom switches, activity entry) must
+        // be reachable by gamepad at idle — they used to enter the focus
+        // list only after the timer had run once.
+        let widgets = timer.focus_widgets();
+        let spin_count = widgets
+            .iter()
+            .filter(|w| w.is::<libadwaita::SpinRow>())
+            .count();
+        let switch_count = widgets
+            .iter()
+            .filter(|w| w.is::<libadwaita::SwitchRow>())
+            .count();
+        assert!(
+            spin_count >= 4,
+            "all four timer spin rows must be gamepad-reachable at idle, found {spin_count}"
+        );
+        assert!(
+            switch_count >= 2,
+            "warm-up and custom-rounds switches must be gamepad-reachable, found {switch_count}"
+        );
+        assert!(
+            widgets
+                .iter()
+                .any(|w| w.is::<libadwaita::EntryRow>()),
+            "the activity entry row must be gamepad-reachable"
+        );
+
+        // Cycle to the presets button and press A: it must open the
+        // presets dialog, not start the timer.
+        let presets_idx = widgets
+            .iter()
+            .position(|w| {
+                w.downcast_ref::<gtk4::Button>()
+                    .and_then(|b| b.label())
+                    .map(|l| l.starts_with("Presets"))
+                    .unwrap_or(false)
+            })
+            .expect("the presets button must be in the focus list");
+        for _ in 0..=presets_idx {
+            timer.controller_dpad_down();
+        }
+        timer.controller_a();
+        pump_main_loop(2);
+
+        let controller = registered
+            .borrow()
+            .clone()
+            .expect("A on the presets button must open the presets dialog");
+
+        // A must not have started the timer: while running, the config
+        // spins are insensitive and drop out of the focus list.
+        let spins_now = timer
+            .focus_widgets()
+            .iter()
+            .filter(|w| w.is::<libadwaita::SpinRow>())
+            .count();
+        assert!(
+            spins_now >= 4,
+            "A must not start the timer (Start button does), config spins still reachable: {spins_now}"
+        );
+
+        // The dialog tracks its rows and buttons for dpad navigation.
+        let dialog_widgets = controller.tracker.borrow().widgets();
+        assert!(
+            dialog_widgets.len() >= 3,
+            "the presets dialog must track its rows and buttons"
+        );
+        assert!(
+            dialog_widgets
+                .iter()
+                .any(|w| w.is::<libadwaita::ActionRow>()),
+            "preset rows must be gamepad-focusable in the dialog"
+        );
+
+        // Activating a preset row applies it and closes the dialog, which
+        // unregisters the controller.
+        controller.tracker.borrow_mut().focus_first();
+        controller.activate_focused();
+        pump_main_loop(5);
+        assert!(
+            registered.borrow().is_none(),
+            "applying a preset must close the dialog and unregister it"
+        );
+
+        win.close();
+        })
+    }
+
+    /// Full window-level controller routing: open a plan, start the
+    /// training, quit via B + confirm via A (the exact gamepad path).
+    #[test]
+    fn controller_window_routing() {
+        run_in_gtk(|| {
+        let data_dir = fresh_data_dir();
+
+        // Seed the store before the window is built.
+        {
+            std::fs::create_dir_all(&data_dir).unwrap();
+            let store = crate::data_store::DataStore::new();
+            store.save_plan(&test_plan());
+        }
+
+        let app = libadwaita::Application::builder().build();
+        let mw = crate::window::MainWindow::new(&app);
+        mw.gtk_window().present();
+        pump_main_loop(3);
+
+        // Switch to the Training Plans tab via L1/R1 like a gamepad would.
+        for _ in 0..8 {
+            if mw.visible_tab() == "plans" {
+                break;
+            }
+            mw.on_controller_action("r1");
+            pump_main_loop(1);
+        }
+        assert_eq!(mw.visible_tab(), "plans");
+
+        // Focus and open the first plan row with A.
+        mw.on_controller_action("dpad_down");
+        mw.on_controller_action("a");
+        pump_main_loop(2);
+        assert_eq!(
+            mw.training_plan.visible_page(),
+            "editor",
+            "A on a plan row must open the editor"
+        );
+
+        // Start the training with the Start button.
+        mw.on_controller_action("start");
+        pump_main_loop(2);
+        assert_eq!(mw.training_plan.visible_page(), "runner");
+
+        // Quit: B opens the confirmation dialog...
+        mw.on_controller_action("b");
+        pump_main_loop(2);
+        // ...A confirms it through the window dialog routing.
+        mw.on_controller_action("a");
+        pump_main_loop(5);
+        assert_eq!(
+            mw.training_plan.visible_page(),
+            "summary",
+            "confirming End Training must land on the summary page"
+        );
+
+        // B on the summary goes back to the plan list.
+        mw.on_controller_action("b");
+        pump_main_loop(3);
+        assert_eq!(mw.training_plan.visible_page(), "list");
+        })
     }
 
     /// Live end-to-end generation through the real page pipeline:

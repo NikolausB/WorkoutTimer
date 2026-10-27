@@ -3,10 +3,20 @@ use gtk4::glib;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-fn data_dir() -> PathBuf {
+/// Base data directory (`~/.local/share/training-flatpak`). The
+/// `TRAINING_DATA_DIR` env var overrides it so the test suite can work on
+/// throwaway data instead of the real user files.
+pub fn base_data_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("TRAINING_DATA_DIR") {
+        return PathBuf::from(dir);
+    }
     let dir = glib::user_data_dir().join("training-flatpak");
     let _ = fs::create_dir_all(&dir);
     dir
+}
+
+fn data_dir() -> PathBuf {
+    base_data_dir()
 }
 
 fn plans_path() -> PathBuf {

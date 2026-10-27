@@ -52,6 +52,11 @@ impl ControllerFocusTracker {
         }
     }
 
+    /// The tracked widgets in visual order (clone of the list).
+    pub fn widgets(&self) -> Vec<Widget> {
+        self.widgets.clone()
+    }
+
     pub fn cycle(&mut self, delta: i32) {
         if self.widgets.is_empty() {
             return;

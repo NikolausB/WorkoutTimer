@@ -15,8 +15,11 @@ pub fn hints_for(context: &str, sub_key: &str) -> String {
         },
         "runner_summary" => "[A] Back to Menu  [Guide] Fullscreen".to_string(),
         "timer" => {
-            "[A] Start  [Start] Pause  [B] Skip  [X] Reset  [L1/R1] Tabs  [Guide] Fullscreen"
+            "[A] Activate  [Start] Start/Pause  [B] Skip  [X] Reset  [L1/R1] Tabs  [Guide] Fullscreen"
                 .to_string()
+        }
+        "presets" => {
+            "[A] Apply  [B] Back  [Start] Start/Pause  [L1/R1] Tabs  [Guide] Fullscreen".to_string()
         }
         "list" => "[A] Open  [X] Favorite  [B] Back  [L1/R1] Tabs  [Guide] Fullscreen".to_string(),
         "editor" => {
@@ -37,6 +40,7 @@ pub fn hints_for(context: &str, sub_key: &str) -> String {
 /// All controller contexts, in the order the help page lists them.
 pub const HINT_CONTEXTS: &[(&str, &str)] = &[
     ("timer", "Round timer"),
+    ("presets", "Timer presets dialog"),
     ("list", "Training plans"),
     ("editor", "Plan editor"),
     ("runner_exercise", "Workout runner"),

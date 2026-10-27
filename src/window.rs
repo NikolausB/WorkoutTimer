@@ -57,12 +57,15 @@ pub fn refresh_all_pages() {
         mw.refresh_all_pages();
     }
 }
+#[derive(Clone)]
 enum OpenDialog {
     Preferences(Rc<PreferencesDialog>),
     ExercisePicker(Rc<crate::exercise_picker::ExercisePicker>),
     /// libadwaita confirmation AlertDialogs (end training, delete plan).
     /// The String is the response id that should count as "confirm".
     AlertConfirm(Rc<libadwaita::AlertDialog>, String),
+    /// The round timer presets dialog, navigable with the gamepad.
+    Presets(Rc<crate::round_timer::PresetsDialogController>),
 }
 
 pub struct MainWindow {
@@ -72,7 +75,7 @@ pub struct MainWindow {
     resize_timeout_id: RefCell<Option<glib::SourceId>>,
 
     round_timer: Rc<RoundTimerPage>,
-    training_plan: Rc<crate::training_plan::TrainingPlanPage>,
+    pub(crate) training_plan: Rc<crate::training_plan::TrainingPlanPage>,
     history: Rc<crate::history::HistoryPage>,
     home: Rc<HomePage>,
     ai_coach: Rc<crate::ai_coach::AICoachPage>,
@@ -356,6 +359,16 @@ impl MainWindow {
                     if let Some(m) = mw_weak.upgrade() {
                         m.training_plan.refresh_plans();
                         m.stack.set_visible_child_name("plans");
+                    }
+                }));
+        }
+
+        {
+            let mw_weak = Rc::downgrade(&mw);
+            mw.round_timer
+                .set_presets_dialog_registrar(Rc::new(move |ctrl| {
+                    if let Some(m) = mw_weak.upgrade() {
+                        m.register_presets_dialog(ctrl);
                     }
                 }));
         }
@@ -697,6 +710,23 @@ impl MainWindow {
         *self.open_dialog.borrow_mut() = dlg.map(|(d, id)| OpenDialog::AlertConfirm(d, id));
     }
 
+    /// The round timer presets dialog registers itself here while open.
+    pub fn register_presets_dialog(
+        &self,
+        ctrl: Option<Rc<crate::round_timer::PresetsDialogController>>,
+    ) {
+        match ctrl {
+            Some(c) => {
+                *self.open_dialog.borrow_mut() = Some(OpenDialog::Presets(c));
+                self.hints_overlay.borrow_mut().set_context("presets");
+            }
+            None => {
+                *self.open_dialog.borrow_mut() = None;
+                self.update_hints_visibility();
+            }
+        }
+    }
+
     pub fn update_hints_visibility(&self) {
         let settings = load_settings();
         let connected = self
@@ -737,7 +767,7 @@ impl MainWindow {
         }
     }
 
-    fn on_controller_action(&self, action: &str) {
+    pub(crate) fn on_controller_action(&self, action: &str) {
         let settings = load_settings();
         if std::env::var("CONTROLLER_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
             println!("[window] controller action '{}' (gamepad_enabled={})", action, settings.gamepad_enabled);
@@ -779,8 +809,12 @@ impl MainWindow {
             _ => {}
         }
 
-        // Dialogs get priority
-        if let Some(dialog) = self.open_dialog.borrow().as_ref() {
+        // Dialogs get priority. The handle is cloned out of the RefCell
+        // before dispatching: closing a dialog runs its response handlers
+        // synchronously, and they unregister the dialog — a live borrow
+        // here would panic.
+        let active_dialog = self.open_dialog.borrow().clone();
+        if let Some(dialog) = active_dialog {
             match dialog {
                 OpenDialog::Preferences(p) => match action {
                     "dpad_up" => p.controller_dpad_up(),
@@ -809,6 +843,15 @@ impl MainWindow {
                     "b" | "back" => {
                         // Cancel (the default close response).
                         dlg.close();
+                    }
+                    _ => {}
+                },
+                OpenDialog::Presets(p) => match action {
+                    "dpad_up" => p.tracker.borrow_mut().cycle(-1),
+                    "dpad_down" => p.tracker.borrow_mut().cycle(1),
+                    "a" => p.activate_focused(),
+                    "b" | "back" => {
+                        p.dialog.close();
                     }
                     _ => {}
                 },
@@ -921,7 +964,7 @@ impl MainWindow {
         self.stack.set_visible_child_name(visible_names[next_idx]);
     }
 
-    fn visible_tab(&self) -> &'static str {
+    pub(crate) fn visible_tab(&self) -> &'static str {
         let Some(child) = self.stack.visible_child() else {
             return "";
         };

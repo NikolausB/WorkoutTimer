@@ -2299,7 +2299,11 @@ impl TrainingPlanPage {
                 }
             }
             "editor" => {
-                if let Some(widget) = self.editor_focus.borrow().current_widget() {
+                // Clone the widget out before acting: activating rows or
+                // buttons emits notify signals whose handlers rebuild the
+                // focus list, and holding the borrow here would panic.
+                let widget = self.editor_focus.borrow().current_widget();
+                if let Some(widget) = widget {
                     if let Some(expander) = widget.downcast_ref::<ExpanderRow>() {
                         expander.set_expanded(!expander.is_expanded());
                     } else if let Some(btn) = widget.downcast_ref::<Button>() {
@@ -2385,7 +2389,8 @@ impl TrainingPlanPage {
         if self.visible_page() != "editor" {
             return;
         }
-        if let Some(widget) = self.editor_focus.borrow().current_widget() {
+        let widget = self.editor_focus.borrow().current_widget();
+        if let Some(widget) = widget {
             adjust_focused_widget(&widget, -1);
         }
     }
@@ -2403,14 +2408,18 @@ impl TrainingPlanPage {
         if self.visible_page() != "editor" {
             return;
         }
-        if let Some(widget) = self.editor_focus.borrow().current_widget() {
+        let widget = self.editor_focus.borrow().current_widget();
+        if let Some(widget) = widget {
             adjust_focused_widget(&widget, 1);
         }
     }
 
     pub fn controller_x(&self) {
         if self.visible_page() == "editor" {
-            if let Some(widget) = self.editor_focus.borrow().current_widget() {
+            // Same as controller_a: drop the borrow before mutating the row,
+            // the notify handler rebuilds the focus list synchronously.
+            let widget = self.editor_focus.borrow().current_widget();
+            if let Some(widget) = widget {
                 if let Some(expander) = widget.downcast_ref::<ExpanderRow>() {
                     expander.set_expanded(!expander.is_expanded());
                 } else {
@@ -2425,19 +2434,21 @@ impl TrainingPlanPage {
                 }
             }
         } else if self.visible_page() == "list" {
-            if let Some(widget) = self.list_focus.borrow().current_widget() {
+            let widget = self.list_focus.borrow().current_widget();
+            if let Some(widget) = widget {
                 if let Some(row) = widget.downcast_ref::<ActionRow>() {
                     let idx = row.index();
-                    let plans = self.plans.borrow();
-                    if idx >= 0 && (idx as usize) < plans.len() {
-                        let plan_id = plans[idx as usize].id.clone();
-                        drop(plans);
-                        if let Some(star_btn) = self.star_buttons.borrow().get(&plan_id).cloned()
-                        {
-                            if let Some(btn) = star_btn.downcast_ref::<Button>() {
-                                btn.emit_clicked();
-                            }
+                    let plan_id = {
+                        let plans = self.plans.borrow();
+                        if idx >= 0 && (idx as usize) < plans.len() {
+                            plans[idx as usize].id.clone()
+                        } else {
+                            return;
                         }
+                    };
+                    let star_btn = self.star_buttons.borrow().get(&plan_id).cloned();
+                    if let Some(btn) = star_btn.and_then(|b| b.downcast_ref::<Button>().cloned()) {
+                        btn.emit_clicked();
                     }
                 }
             }

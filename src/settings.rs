@@ -1,11 +1,9 @@
-use gtk4::glib;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
 fn settings_dir() -> PathBuf {
-    let data_dir = glib::user_data_dir();
-    data_dir.join("training-flatpak")
+    crate::data_store::base_data_dir()
 }
 
 fn settings_path() -> PathBuf {

@@ -99,6 +99,32 @@ pub struct RoundTimerPage {
     skip_btn: Button,
     favorite_preset_btn: Button,
     presets_btn: Button,
+    presets_dialog_registrar: RefCell<Option<PresetsDialogRegistrar>>,
+}
+
+/// Gamepad controller state for the open presets dialog: the dialog plus
+/// the focus tracker over its rows and buttons. The window routes dpad/A/B
+/// through this while the dialog is open.
+pub(crate) type PresetsDialogRegistrar =
+    Rc<dyn Fn(Option<Rc<PresetsDialogController>>)>;
+
+pub(crate) struct PresetsDialogController {
+    pub(crate) dialog: Dialog,
+    pub(crate) tracker: Rc<RefCell<ControllerFocusTracker>>,
+}
+
+impl PresetsDialogController {
+    /// Activate the focused widget (rows apply a preset, buttons click).
+    pub(crate) fn activate_focused(&self) {
+        let widget = self.tracker.borrow().current_widget();
+        if let Some(widget) = widget {
+            if let Some(row) = widget.downcast_ref::<libadwaita::ActionRow>() {
+                libadwaita::prelude::ActionRowExt::activate(row);
+            } else if let Some(btn) = widget.downcast_ref::<gtk4::Button>() {
+                btn.emit_clicked();
+            }
+        }
+    }
 }
 
 impl RoundTimerPage {
@@ -271,6 +297,7 @@ impl RoundTimerPage {
             skip_btn: skip_btn.clone(),
             favorite_preset_btn: favorite_preset_btn.clone(),
             presets_btn: presets_btn.clone(),
+            presets_dialog_registrar: RefCell::new(None),
         });
 
         // The favorite pill applies the favorite preset.
@@ -381,30 +408,24 @@ impl RoundTimerPage {
             });
         }
 
-        {
-            let mut initial: Vec<gtk4::Widget> = vec![
-                rounds_spin.clone().upcast(),
-                round_time_spin.clone().upcast(),
-                pause_time_spin.clone().upcast(),
-            ];
-            if page.favorite_preset_btn.is_visible() {
-                initial.push(page.favorite_preset_btn.clone().upcast());
-            }
-            initial.push(page.presets_btn.clone().upcast());
-            initial.extend(vec![
-                start_btn.clone().upcast(),
-                pause_btn.clone().upcast(),
-                reset_btn.clone().upcast(),
-                skip_btn.clone().upcast(),
-            ]);
-            page.focus.borrow_mut().set_widgets(initial);
-        }
+        // Full initial focus list: every config row must be reachable with
+        // the gamepad right away, not only after the timer ran once.
+        page.rebuild_focus_list();
 
         page
     }
 
     pub fn widget(&self) -> &Bin {
         &self.widget
+    }
+
+    /// Window hook so controller events reach the presets dialog while it
+    /// is open; `None` releases the registration when it closes.
+    pub fn set_presets_dialog_registrar(
+        &self,
+        cb: PresetsDialogRegistrar,
+    ) {
+        *self.presets_dialog_registrar.borrow_mut() = Some(cb);
     }
 
     /// Find a preset by name (builtin or user-saved).
@@ -521,6 +542,9 @@ impl RoundTimerPage {
             .selection_mode(gtk4::SelectionMode::None)
             .build();
 
+        // Preset rows in visual order, for the gamepad focus tracker.
+        let mut preset_rows: Vec<ActionRow> = Vec::new();
+
         if customs.is_empty() {
             let empty = Label::new(Some(
                 "No custom presets yet \u{2014} save your current setup below.",
@@ -540,6 +564,7 @@ impl RoundTimerPage {
                 .subtitle(&preset_summary(&preset.config))
                 .activatable(true)
                 .build();
+            preset_rows.push(row.clone());
 
             let star_icon = if preset.name == favorite {
                 "starred-symbolic"
@@ -645,6 +670,35 @@ impl RoundTimerPage {
         content.append(&back_btn);
 
         dialog.set_child(Some(&content));
+
+        // Register the dialog with the window so gamepad input is routed to
+        // it while it is open (dpad cycles, A activates, B closes).
+        {
+            let registrar = self.presets_dialog_registrar.borrow().clone();
+            if let Some(cb) = registrar {
+                let mut tracker = ControllerFocusTracker::new();
+                let mut focus_widgets: Vec<gtk4::Widget> = Vec::new();
+                for row in &preset_rows {
+                    focus_widgets.push(row.clone().upcast());
+                }
+                focus_widgets.push(add_btn.clone().upcast());
+                focus_widgets.push(back_btn.clone().upcast());
+                tracker.set_widgets(focus_widgets);
+                let controller = Rc::new(PresetsDialogController {
+                    dialog: dialog.clone(),
+                    tracker: Rc::new(RefCell::new(tracker)),
+                });
+                cb(Some(Rc::clone(&controller)));
+                let cleanup: Rc<dyn Fn()> = {
+                    let cb = Rc::clone(&cb);
+                    Rc::new(move || cb(None))
+                };
+                dialog.connect_closed(move |_| {
+                    cleanup();
+                });
+            }
+        }
+
         if let Some(root) = self
             .widget
             .root()
@@ -838,6 +892,9 @@ impl RoundTimerPage {
             });
         }
         self.custom_rounds_box.append(&add_btn);
+
+        // The per-round rows (and their buttons) are part of the focus list.
+        self.rebuild_focus_list();
     }
 
     /// Read the current widget state into the config and persist it.
@@ -1157,6 +1214,57 @@ impl RoundTimerPage {
         }
     }
 
+    /// Collect the focusable widgets in visual order: configuration rows,
+    /// per-round custom rows, preset buttons and the action buttons.
+    /// Sensitive-only, so running/disabled widgets drop out automatically.
+    fn rebuild_focus_list(&self) {
+        let mut widgets: Vec<gtk4::Widget> = Vec::new();
+        for w in [
+            self.rounds_spin.clone().upcast::<gtk4::Widget>(),
+            self.round_time_spin.clone().upcast::<gtk4::Widget>(),
+            self.pause_time_spin.clone().upcast::<gtk4::Widget>(),
+            self.prep_spin.clone().upcast::<gtk4::Widget>(),
+            self.warmup_switch.clone().upcast::<gtk4::Widget>(),
+            self.title_entry.clone().upcast::<gtk4::Widget>(),
+            self.custom_switch.clone().upcast::<gtk4::Widget>(),
+        ] {
+            if w.is_sensitive() {
+                widgets.push(w);
+            }
+        }
+        // Custom (per-round) rows: work/rest spin rows, remove and add
+        // buttons, in the order they appear in the box.
+        if self.custom_switch.is_active() && self.custom_rounds_box.is_visible() {
+            let mut child = self.custom_rounds_box.first_child();
+            while let Some(c) = child {
+                child = c.next_sibling();
+                let mut row_child = c.first_child();
+                while let Some(rc) = row_child {
+                    row_child = rc.next_sibling();
+                    if rc.is_sensitive() {
+                        widgets.push(rc);
+                    }
+                }
+            }
+        }
+        for btn in [&self.favorite_preset_btn, &self.presets_btn] {
+            if btn.is_sensitive() && btn.is_visible() {
+                widgets.push(btn.clone().upcast());
+            }
+        }
+        for w in [
+            self.start_btn.clone().upcast::<gtk4::Widget>(),
+            self.pause_btn.clone().upcast::<gtk4::Widget>(),
+            self.reset_btn.clone().upcast::<gtk4::Widget>(),
+            self.skip_btn.clone().upcast::<gtk4::Widget>(),
+        ] {
+            if w.is_sensitive() {
+                widgets.push(w);
+            }
+        }
+        self.focus.borrow_mut().set_widgets(widgets);
+    }
+
     fn update_buttons_running(&self, running: bool) {
         self.pause_btn.set_sensitive(running);
         self.reset_btn
@@ -1170,41 +1278,19 @@ impl RoundTimerPage {
         self.round_time_spin.set_sensitive(config_editable);
         self.pause_time_spin.set_sensitive(config_editable);
 
-        let mut widgets: Vec<gtk4::Widget> = Vec::new();
-        for w in [
-            &self.rounds_spin.clone().upcast::<gtk4::Widget>(),
-            &self.round_time_spin.clone().upcast::<gtk4::Widget>(),
-            &self.pause_time_spin.clone().upcast::<gtk4::Widget>(),
-            &self.prep_spin.clone().upcast::<gtk4::Widget>(),
-            &self.warmup_switch.clone().upcast::<gtk4::Widget>(),
-            &self.title_entry.clone().upcast::<gtk4::Widget>(),
-            &self.custom_switch.clone().upcast::<gtk4::Widget>(),
-        ] {
-            if w.is_sensitive() {
-                widgets.push(w.clone());
-            }
-        }
-        for btn in [&self.favorite_preset_btn, &self.presets_btn] {
-            if btn.is_sensitive() && btn.is_visible() {
-                widgets.push(btn.clone().upcast());
-            }
-        }
-        for w in [
-            &self.start_btn.clone().upcast::<gtk4::Widget>(),
-            &self.pause_btn.clone().upcast::<gtk4::Widget>(),
-            &self.reset_btn.clone().upcast::<gtk4::Widget>(),
-            &self.skip_btn.clone().upcast::<gtk4::Widget>(),
-        ] {
-            if w.is_sensitive() {
-                widgets.push(w.clone());
-            }
-        }
-        self.focus.borrow_mut().set_widgets(widgets);
+        self.rebuild_focus_list();
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn countdown_label(&self) -> gtk4::Label {
         self.countdown_label.clone()
+    }
+
+    /// The gamepad focus list, in visual order (used by the tests to
+    /// verify every config row is reachable).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn focus_widgets(&self) -> Vec<gtk4::Widget> {
+        self.focus.borrow().widgets()
     }
 
     pub fn update_fonts(&self, width: i32, height: i32) {
@@ -1283,7 +1369,18 @@ impl RoundTimerPage {
     }
 
     pub fn controller_a(&self) {
-        self.on_start_clicked();
+        // A activates the focused widget: opens the presets menu, clicks
+        // buttons and toggles switches. Start/pause lives on the Start
+        // button instead, so A never races the timer.
+        let widget = self.focus.borrow().current_widget();
+        let Some(widget) = widget else { return };
+        if let Some(btn) = widget.downcast_ref::<gtk4::Button>() {
+            btn.emit_clicked();
+        } else if let Some(switch) = widget.downcast_ref::<SwitchRow>() {
+            switch.set_active(!switch.is_active());
+        } else if let Some(entry) = widget.downcast_ref::<libadwaita::EntryRow>() {
+            entry.grab_focus();
+        }
     }
 }
 
