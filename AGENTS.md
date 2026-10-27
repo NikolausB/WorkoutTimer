@@ -29,10 +29,14 @@ cargo run
 - `controller_dpad_up/down` cycles through the page's focusable widgets in visual order.
 - `controller_dpad_left/right` adjusts the focused widget value where appropriate (spin rows, combo rows, switches).
 - `controller_a` activates the focused widget (expand/collapse rows, click buttons — in the runner too: A clicks the focused Pause/+30s/Skip/Done button, and only falls back to Done/Skip when no button has focus).
-- `controller_x` toggles an expander row in the training plan editor or collapses a focused child back to its parent row.
+- `controller_x` toggles an expander row in the training plan editor, collapses a focused child back to its parent row, and favorites/unfavorites the focused plan in the plans list.
+- `controller_y` skips in the runner and duplicates the focused plan in the plans list.
+- `controller_r2` progresses the focused plan in the plans list (creates a "(progression)" copy via `analytics::progressed_plan`, needs a completed session).
 - `controller_b` goes back / cancels, with confirmation dialogs for stopping workouts.
 - `controller_select` opens the virtual keyboard when a text view is focused in the AI Coach.
 - `controller_start` pauses/resumes in runner, starts training in editor, saves preferences.
+- Round-timer favorites are a list (`settings.favorite_presets`, multiple allowed; the legacy `favorite_preset` string is kept synced with the first entry). Each favorite renders a quick-start pill, and every pill joins the gamepad focus list via `rebuild_focus_list`. Plans sort favorites-first in `refresh_plans`, and the star/row handlers call `refresh_plans` + `focus_plan_row` so icon, order and focus update immediately.
+- `sync_add30` in `training_plan.rs` keeps the runner's +30s button sensitivity in step with the timer and rebuilds the runner focus list on flips — widget-sensitivity changes always need a focus-list rebuild (`ControllerFocusTracker` filters insensitive widgets).
 
 Dialogs must register with the window (`register_exercise_picker_dialog` / `register_presets_dialog` / `register_alert_dialog`) **and unregister from a `closed` handler** — a registration left behind routes all controller input to the dead dialog forever ("gamepad freeze"). The exercise picker re-registers itself when its add-exercise form closes (the form takes over routing in the meantime). `PresetsDialogController { dialog, tracker, hints }` is the generic dialog-controller shape (presets dialog, save-preset dialog, picker add-form); its `hints` field names the hint-bar context while the dialog is open (`picker` / `presets` / `form` / `alert` in `controller_hints.rs`). While any dialog is registered, `update_hints_visibility` leaves the hint bar to the dialog; otherwise the hint context follows window tab switches *and* the plans `NavigationView` `visible-page` notify (list/editor/runner/summary) plus runner phase changes (`refresh_runner_hints`).
 

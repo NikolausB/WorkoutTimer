@@ -97,7 +97,8 @@ pub struct RoundTimerPage {
     pause_btn: Button,
     reset_btn: Button,
     skip_btn: Button,
-    favorite_preset_btn: Button,
+    preset_box: GtkBox,
+    favorite_pills: RefCell<Vec<Button>>,
     presets_btn: Button,
     presets_dialog_registrar: RefCell<Option<PresetsDialogRegistrar>>,
 }
@@ -241,13 +242,11 @@ impl RoundTimerPage {
 
         main_box.append(&config_group);
 
-        // Quick presets: the favorite as a pill + a submenu with all presets.
+        // Quick presets: one pill per favorited preset + a submenu with
+        // all presets. The pills are rebuilt in refresh_favorite_pill.
         let preset_box = GtkBox::new(Orientation::Horizontal, 8);
         preset_box.set_halign(Align::Center);
         preset_box.set_margin_top(4);
-        let favorite_preset_btn = Button::builder().css_classes(["pill"]).build();
-        favorite_preset_btn.set_visible(false);
-        preset_box.append(&favorite_preset_btn);
         let presets_btn = Button::builder()
             .label("Presets…")
             .css_classes(["pill"])
@@ -300,23 +299,11 @@ impl RoundTimerPage {
             pause_btn: pause_btn.clone(),
             reset_btn: reset_btn.clone(),
             skip_btn: skip_btn.clone(),
-            favorite_preset_btn: favorite_preset_btn.clone(),
+            preset_box: preset_box.clone(),
+            favorite_pills: RefCell::new(Vec::new()),
             presets_btn: presets_btn.clone(),
             presets_dialog_registrar: RefCell::new(None),
         });
-
-        // The favorite pill applies the favorite preset.
-        {
-            let page_weak = Rc::downgrade(&page);
-            favorite_preset_btn.connect_clicked(move |_| {
-                if let Some(p) = page_weak.upgrade() {
-                    let settings = load_settings();
-                    if let Some(preset) = p.find_preset(&settings, &settings.favorite_preset) {
-                        p.apply_preset(&preset.config);
-                    }
-                }
-            });
-        }
 
         // The Presets button opens the preset submenu dialog.
         {
@@ -459,23 +446,58 @@ impl RoundTimerPage {
         self.sync_config_from_widgets();
     }
 
-    /// Show/hide the favorite pill to match the persisted favorite.
-    fn refresh_favorite_pill(&self) {
+    /// Rebuild the quick-start pills: one per favorited preset (that
+    /// still exists), followed by the Presets button.
+    fn refresh_favorite_pill(self: &Rc<Self>) {
         let settings = load_settings();
-        let exists = self
-            .find_preset(&settings, &settings.favorite_preset)
-            .is_some();
-        self.favorite_preset_btn.set_visible(exists);
-        if exists {
-            self.favorite_preset_btn
-                .set_label(&settings.favorite_preset);
+        let mut pills: Vec<Button> = Vec::new();
+        // Drop all children, then re-append pills + the presets button.
+        let mut child = self.preset_box.first_child();
+        while let Some(c) = child {
+            child = c.next_sibling();
+            self.preset_box.remove(&c);
         }
+        for name in &settings.favorite_presets {
+            let Some(preset) = self.find_preset(&settings, name) else {
+                continue;
+            };
+            let pill = Button::builder()
+                .label(name)
+                .css_classes(["pill"])
+                .tooltip_text("Apply favorite preset")
+                .build();
+            {
+                let page_weak = Rc::downgrade(self);
+                let config = preset.config.clone();
+                pill.connect_clicked(move |_| {
+                    if let Some(p) = page_weak.upgrade() {
+                        p.apply_preset(&config);
+                    }
+                });
+            }
+            self.preset_box.append(&pill);
+            pills.push(pill);
+        }
+        self.preset_box.append(&self.presets_btn);
+        *self.favorite_pills.borrow_mut() = pills;
+        // New pills must join the gamepad focus list.
+        self.rebuild_focus_list();
     }
 
-    /// Set (or clear with an empty name) the favorite preset and persist it.
-    fn set_favorite_preset(&self, name: &str) {
+    /// Toggle a preset in the favorites list and persist it. The legacy
+    /// single-favorite field is kept in sync for older builds.
+    fn set_favorite_preset(self: &Rc<Self>, name: &str) {
         let mut settings = load_settings();
-        settings.favorite_preset = name.to_string();
+        if let Some(pos) = settings.favorite_presets.iter().position(|n| n == name) {
+            settings.favorite_presets.remove(pos);
+        } else {
+            settings.favorite_presets.push(name.to_string());
+        }
+        settings.favorite_preset = settings
+            .favorite_presets
+            .first()
+            .cloned()
+            .unwrap_or_default();
         save_settings(&settings);
         self.refresh_favorite_pill();
     }
@@ -513,7 +535,7 @@ impl RoundTimerPage {
         content.append(&scrolled);
 
         let settings = load_settings();
-        let favorite = settings.favorite_preset.clone();
+        let favorites: Vec<String> = settings.favorite_presets.clone();
         let builtins = builtin_presets();
         let customs: Vec<TimerPresetEntry> = settings.timer_presets.clone();
 
@@ -563,7 +585,7 @@ impl RoundTimerPage {
                 .build();
             focus_widgets.push(row.clone().upcast());
 
-            let star_icon = if preset.name == favorite {
+            let star_icon = if favorites.contains(&preset.name) {
                 "starred-symbolic"
             } else {
                 "non-starred-symbolic"
@@ -578,15 +600,10 @@ impl RoundTimerPage {
             {
                 let page_weak = Rc::downgrade(self);
                 let name = preset.name.clone();
-                let is_favorite = preset.name == favorite;
                 let dlg = dialog.clone();
                 star.connect_clicked(move |_| {
                     if let Some(p) = page_weak.upgrade() {
-                        if is_favorite {
-                            p.set_favorite_preset("");
-                        } else {
-                            p.set_favorite_preset(&name);
-                        }
+                        p.set_favorite_preset(&name);
                         dlg.close();
                     }
                 });
@@ -610,6 +627,7 @@ impl RoundTimerPage {
                         if let Some(p) = page_weak.upgrade() {
                             let mut s = load_settings();
                             s.timer_presets.retain(|p2| p2.name != name);
+                            s.favorite_presets.retain(|n| n != &name);
                             if s.favorite_preset == name {
                                 s.favorite_preset.clear();
                             }
@@ -1284,10 +1302,13 @@ impl RoundTimerPage {
                 }
             }
         }
-        for btn in [&self.favorite_preset_btn, &self.presets_btn] {
+        for btn in self.favorite_pills.borrow().iter() {
             if btn.is_sensitive() && btn.is_visible() {
                 widgets.push(btn.clone().upcast());
             }
+        }
+        if self.presets_btn.is_sensitive() && self.presets_btn.is_visible() {
+            widgets.push(self.presets_btn.clone().upcast());
         }
         for w in [
             self.start_btn.clone().upcast::<gtk4::Widget>(),

@@ -76,8 +76,14 @@ pub struct AppSettings {
     #[serde(default)]
     pub timer_presets: Vec<crate::models::TimerPresetEntry>,
     /// Name of the preset shown as the favorite pill (empty = none).
+    /// Kept in sync with the first entry of `favorite_presets` for
+    /// compatibility with older builds that only know this field.
     #[serde(default)]
     pub favorite_preset: String,
+    /// All favorited round-timer presets (starred in the presets dialog);
+    /// each one gets its own quick-start pill.
+    #[serde(default)]
+    pub favorite_presets: Vec<String>,
     /// Set once the user finished the first-run wizard.
     #[serde(default)]
     pub onboarding_done: bool,
@@ -150,6 +156,7 @@ impl Default for AppSettings {
             timer_config: None,
             timer_presets: Vec::new(),
             favorite_preset: String::new(),
+            favorite_presets: Vec::new(),
             onboarding_done: false,
         }
     }
@@ -182,7 +189,19 @@ pub fn load_settings() -> AppSettings {
         return AppSettings::default();
     }
     match fs::read_to_string(&path) {
-        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+        Ok(content) => {
+            let mut settings: AppSettings =
+                serde_json::from_str(&content).unwrap_or_default();
+            // Migration: older versions stored a single favorite preset.
+            if settings.favorite_presets.is_empty()
+                && !settings.favorite_preset.is_empty()
+            {
+                settings
+                    .favorite_presets
+                    .push(settings.favorite_preset.clone());
+            }
+            settings
+        }
         Err(_) => AppSettings::default(),
     }
 }

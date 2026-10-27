@@ -948,6 +948,7 @@ impl MainWindow {
                 "start" => self.training_plan.controller_start(),
                 "y" => self.training_plan.controller_y(),
                 "x" => self.training_plan.controller_x(),
+                "r2" => self.training_plan.controller_r2(),
                 _ => {}
             }
         } else if child.as_ptr() == self.history.widget().upcast_ref::<gtk4::Widget>().as_ptr() {

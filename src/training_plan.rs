@@ -878,11 +878,18 @@ impl TrainingPlanPage {
             star_btn.set_valign(Align::Center);
             let store = Rc::clone(&self.store);
             let plan_id = plan.id.clone();
+            let page_weak = self.self_weak.borrow().clone();
             star_btn.connect_clicked(move |_| {
+                let Some(p) = page_weak.upgrade() else { return };
                 if let Some(mut plan) = store.get_plan(&plan_id) {
                     plan.is_favorite = !plan.is_favorite;
                     store.save_plan(&plan);
                 }
+                // Refresh immediately so the star icon and the
+                // favorites-first order update (they used to lag until the
+                // next reload), and keep focus on the same plan row.
+                p.refresh_plans();
+                p.focus_plan_row(&plan_id);
             });
             row.add_suffix(&star_btn);
             self.star_buttons
@@ -896,19 +903,12 @@ impl TrainingPlanPage {
                 .build();
             dup_btn.set_valign(Align::Center);
             {
-                let store = Rc::clone(&self.store);
-                let plan_clone = plan.clone();
                 let page_weak = self.self_weak.borrow().clone();
+                let plan_clone = plan.clone();
                 dup_btn.connect_clicked(move |_| {
-                    let mut new_plan = plan_clone.clone();
-                    new_plan.id = uuid::Uuid::new_v4().to_string();
-                    new_plan.name = format!("{} (copy)", new_plan.name);
-                    new_plan.is_favorite = false;
-                    store.save_plan(&new_plan);
                     if let Some(p) = page_weak.upgrade() {
-                        p.refresh_plans();
+                        p.duplicate_plan(&plan_clone);
                     }
-                    crate::window::show_app_toast(&format!("Duplicated \"{}\"", plan_clone.name));
                 });
             }
             row.add_suffix(&dup_btn);
@@ -916,7 +916,6 @@ impl TrainingPlanPage {
             // "Progress this plan": create a copy with increased loads based on
             // the last session of this plan.
             {
-                let store = Rc::clone(&self.store);
                 let plan_clone = plan.clone();
                 let page_weak = self.self_weak.borrow().clone();
                 let prog_btn = Button::builder()
@@ -926,29 +925,9 @@ impl TrainingPlanPage {
                     .build();
                 prog_btn.set_valign(Align::Center);
                 prog_btn.connect_clicked(move |_| {
-                    let sessions = store.load_sessions();
-                    let Some(last) = crate::analytics::last_session_for_plan(&sessions, &plan_clone)
-                    else {
-                        crate::window::show_app_toast(
-                            "Train this plan once to unlock automatic progression",
-                        );
-                        return;
-                    };
-                    let new_plan = crate::analytics::progressed_plan(&plan_clone, last);
-                    store.save_plan(&new_plan);
                     if let Some(p) = page_weak.upgrade() {
-                        p.refresh_plans();
+                        p.progress_plan(&plan_clone);
                     }
-                    let store2 = Rc::clone(&store);
-                    let new_plan_clone = new_plan.clone();
-                    crate::window::show_app_toast_action(
-                        &format!("Created \"{}\"", new_plan.name),
-                        "Undo",
-                        Rc::new(move || {
-                            store2.delete_plan(&new_plan_clone.id);
-                            crate::window::refresh_all_pages();
-                        }),
-                    );
                 });
                 row.add_suffix(&prog_btn);
             }
@@ -979,6 +958,73 @@ impl TrainingPlanPage {
         widgets.push(self.import_btn.clone().upcast());
         self.list_focus.borrow_mut().set_widgets(widgets);
         self.list_focus.borrow_mut().focus_first();
+    }
+
+    /// Move the list focus onto the row of the given plan (after a
+    /// refresh re-sorted the list).
+    fn focus_plan_row(&self, plan_id: &str) {
+        if self.visible_page() != "list" {
+            return;
+        }
+        let idx = self.plans.borrow().iter().position(|p| p.id == plan_id);
+        if let Some(idx) = idx {
+            if let Some(row) = self.plan_list_box.row_at_index(idx as i32) {
+                let row = row.upcast::<gtk4::Widget>();
+                self.list_focus.borrow_mut().move_to_widget(&row);
+            }
+        }
+    }
+
+    /// The plan under the list focus (rows and `plans` share the sorted
+    /// order), for the controller shortcut buttons.
+    fn focused_list_plan(&self) -> Option<TrainingPlan> {
+        let widget = self.list_focus.borrow().current_widget()?;
+        let row = widget.downcast_ref::<ActionRow>()?;
+        let idx = row.index();
+        let plans = self.plans.borrow();
+        if idx >= 0 && (idx as usize) < plans.len() {
+            Some(plans[idx as usize].clone())
+        } else {
+            None
+        }
+    }
+
+    /// Duplicate a plan (row copy button and the Y shortcut).
+    fn duplicate_plan(&self, plan: &TrainingPlan) {
+        let mut new_plan = plan.clone();
+        new_plan.id = uuid::Uuid::new_v4().to_string();
+        new_plan.name = format!("{} (copy)", new_plan.name);
+        new_plan.is_favorite = false;
+        self.store.save_plan(&new_plan);
+        self.refresh_plans();
+        self.focus_plan_row(&new_plan.id);
+        crate::window::show_app_toast(&format!("Duplicated \"{}\"", plan.name));
+    }
+
+    /// "Progress this plan": create a copy with increased loads based on
+    /// the last session of this plan (row button and the R2 shortcut).
+    fn progress_plan(&self, plan: &TrainingPlan) {
+        let sessions = self.store.load_sessions();
+        let Some(last) = crate::analytics::last_session_for_plan(&sessions, plan) else {
+            crate::window::show_app_toast(
+                "Train this plan once to unlock automatic progression",
+            );
+            return;
+        };
+        let new_plan = crate::analytics::progressed_plan(plan, last);
+        self.store.save_plan(&new_plan);
+        self.refresh_plans();
+        self.focus_plan_row(&new_plan.id);
+        let store = Rc::clone(&self.store);
+        let new_plan_clone = new_plan.clone();
+        crate::window::show_app_toast_action(
+            &format!("Created \"{}\"", new_plan.name),
+            "Undo",
+            Rc::new(move || {
+                store.delete_plan(&new_plan_clone.id);
+                crate::window::refresh_all_pages();
+            }),
+        );
     }
 
     // ---------- Editor ----------
@@ -1726,8 +1772,7 @@ impl TrainingPlanPage {
             self.runner_ring.set_progress(remaining / total as f64);
         }
         self.refresh_workout_bar(remaining);
-        self.runner_add30_btn
-            .set_sensitive(self.timer.is_running.get());
+        self.sync_add30();
     }
 
     fn refresh_workout_bar(&self, remaining: f64) {
@@ -1807,6 +1852,7 @@ impl TrainingPlanPage {
             self.sound
                 .play_sound(settings.get_sound("round_start_sound").as_deref());
             self.timer.start(ex.duration_seconds.unwrap());
+            self.sync_add30();
         } else {
             self.reps_revealer.set_reveal_child(true);
             self.set_phase_display("Reps", "phase-reps", COLOR_NEUTRAL);
@@ -1851,6 +1897,7 @@ impl TrainingPlanPage {
             self.sound
                 .play_sound(settings.get_sound("round_end_sound").as_deref());
             self.timer.start(ex.rest_seconds);
+            self.sync_add30();
         } else {
             self.advance_exercise();
         }
@@ -1911,6 +1958,7 @@ impl TrainingPlanPage {
         self.sound
             .play_sound(settings.get_sound("round_end_sound").as_deref());
         self.timer.start(self.rest_between_rounds.get());
+        self.sync_add30();
     }
 
     fn finish_training(&self) {
@@ -2022,6 +2070,32 @@ impl TrainingPlanPage {
             .unwrap_or_default()
     }
 
+    /// The plan ids in the order the list shows them (favorites first) —
+    /// used by the ui tests to verify the favorites-first sorting.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn plans_order(&self) -> Vec<String> {
+        self.plans.borrow().iter().map(|p| p.id.clone()).collect()
+    }
+
+    /// The gamepad focus list of the runner, in visual order — used by
+    /// the ui tests to verify the +30s button is reachable.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn runner_focus_widgets(&self) -> Vec<gtk4::Widget> {
+        self.runner_focus.borrow().widgets()
+    }
+
+    /// Keep the +30s button in sync with the running timer. The gamepad
+    /// focus tracker drops insensitive widgets, so whenever the button
+    /// flips the focus list must be rebuilt — otherwise +30s stays
+    /// unreachable for the rest of the workout.
+    fn sync_add30(&self) {
+        let on = self.timer.is_running.get();
+        if self.runner_add30_btn.is_sensitive() != on {
+            self.runner_add30_btn.set_sensitive(on);
+            self.refresh_runner_focus();
+        }
+    }
+
     fn on_runner_pause(&self) {
         if self.timer.is_running.get() {
             self.timer.pause();
@@ -2034,8 +2108,7 @@ impl TrainingPlanPage {
             self.runner_ring.set_dimmed(false);
             self.runner_phase_label.remove_css_class("dim-label");
         }
-        self.runner_add30_btn
-            .set_sensitive(self.timer.is_running.get());
+        self.sync_add30();
     }
 
     fn on_runner_add30(&self) {
@@ -2051,6 +2124,7 @@ impl TrainingPlanPage {
 
     fn on_runner_skip(&self) {
         self.timer.stop();
+        self.sync_add30();
         if self.running_plan.borrow().is_none() {
             return;
         }
@@ -2362,10 +2436,28 @@ impl TrainingPlanPage {
     }
 
     pub fn controller_y(&self) {
-        if self.visible_page() == "runner"
-            && (self.phase.get() == Phase::Exercise || self.phase.get() == Phase::Rest)
-        {
-            self.on_runner_skip();
+        match self.visible_page() {
+            "runner" => {
+                if self.phase.get() == Phase::Exercise || self.phase.get() == Phase::Rest {
+                    self.on_runner_skip();
+                }
+            }
+            "list" => {
+                if let Some(plan) = self.focused_list_plan() {
+                    self.duplicate_plan(&plan);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// R2 on the plans list: progress the focused plan (gamepad shortcut
+    /// for the per-row "progress" button).
+    pub fn controller_r2(&self) {
+        if self.visible_page() == "list" {
+            if let Some(plan) = self.focused_list_plan() {
+                self.progress_plan(&plan);
+            }
         }
     }
 

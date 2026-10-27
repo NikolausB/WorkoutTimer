@@ -1049,6 +1049,19 @@ mod ui_tests {
 
         // Default focus is the Pause button: A must pause, not skip.
         assert_eq!(mw.training_plan.runner_pause_label(), "Pause");
+        // While the timer runs, the +30s button must be in the gamepad
+        // focus list (regression for the "+30s unreachable with the
+        // controller" bug).
+        assert!(
+            mw.training_plan
+                .runner_focus_widgets()
+                .iter()
+                .any(|w| w.downcast_ref::<gtk4::Button>()
+                    .and_then(|b| b.label())
+                    .map(|l| l == "+30s")
+                    .unwrap_or(false)),
+            "the +30s button must be reachable while the workout runs"
+        );
         mw.on_controller_action("a");
         pump_main_loop(1);
         assert_eq!(
@@ -1064,11 +1077,13 @@ mod ui_tests {
             "A again must resume the workout"
         );
 
-        // One dpad_down moves focus to Skip (pause -> skip; the +30s
-        // button is insensitive at start and drops out of the list).
-        // A then skips: exercise, its rest, the next exercise and its
-        // rest — after that the workout is over and the summary shows.
-        // This is exactly the "A skips what I selected" behavior.
+        // Two dpad_downs move focus to Skip (pause -> +30s -> skip;
+        // +30s is sensitive while the timer runs and reachable on the
+        // gamepad). A then skips: exercise, its rest, the next
+        // exercise and its rest — after that the workout is over and
+        // the summary shows. This is exactly the "A skips what I
+        // selected" behavior.
+        mw.on_controller_action("dpad_down");
         mw.on_controller_action("dpad_down");
         for _ in 0..4 {
             mw.on_controller_action("a");
@@ -1079,6 +1094,232 @@ mod ui_tests {
             "summary",
             "A with the Skip button focused must skip each exercise and rest"
         );
+        })
+    }
+
+    /// Multiple round-timer presets can be favorited at once, and every
+    /// favorite pill joins the gamepad focus list (regression for the
+    /// "only one favorite, unreachable with the controller" bugs).
+    #[test]
+    fn multiple_favorite_presets_pills() {
+        run_in_gtk(|| {
+        use std::cell::RefCell;
+        let _data_dir = fresh_data_dir();
+
+        let timer = crate::round_timer::RoundTimerPage::new(Rc::new(
+            crate::sound::SoundPlayer::new(),
+        ));
+        let win = gtk4::Window::new();
+        win.set_child(Some(timer.widget()));
+        win.present();
+        pump_main_loop(2);
+
+        let registered: Rc<RefCell<Option<Rc<crate::round_timer::PresetsDialogController>>>> =
+            Rc::new(RefCell::new(None));
+        {
+            let registered = Rc::clone(&registered);
+            timer.set_presets_dialog_registrar(Rc::new(move |c| {
+                *registered.borrow_mut() = c;
+            }));
+        }
+
+        // Star two different builtin presets through the gamepad path.
+        for round in 0..2 {
+            if round == 0 {
+                let widgets = timer.focus_widgets();
+                let presets_idx = widgets
+                    .iter()
+                    .position(|w| {
+                        w.downcast_ref::<gtk4::Button>()
+                            .and_then(|b| b.label())
+                            .map(|l| l.starts_with("Presets"))
+                            .unwrap_or(false)
+                    })
+                    .expect("the presets button must be in the focus list");
+                for _ in 0..=presets_idx {
+                    timer.controller_dpad_down();
+                }
+            }
+            // On the second round the presets button still has focus.
+            timer.controller_a();
+            pump_main_loop(2);
+            let controller = registered
+                .borrow()
+                .clone()
+                .expect("the presets dialog must be registered while open");
+
+            let unstarred: Vec<gtk4::Widget> = {
+                let widgets = controller.tracker.borrow().widgets();
+                widgets
+                    .iter()
+                    .filter(|w| {
+                        w.downcast_ref::<gtk4::Button>()
+                            .and_then(|b| b.icon_name())
+                            .map(|i| i.as_str() == "non-starred-symbolic")
+                            .unwrap_or(false)
+                    })
+                    .cloned()
+                    .collect()
+            };
+            let star = unstarred
+                .get(round)
+                .expect("there must be another unstarred builtin preset")
+                .clone();
+            controller.tracker.borrow_mut().move_to_widget(&star);
+            controller.activate_focused();
+            pump_main_loop(3);
+            assert!(
+                registered.borrow().is_none(),
+                "starring must close the dialog and unregister it"
+            );
+        }
+
+        let settings = crate::settings::load_settings();
+        assert_eq!(
+            settings.favorite_presets.len(),
+            2,
+            "two presets must be favoritable at the same time"
+        );
+        assert_eq!(
+            settings.favorite_preset, settings.favorite_presets[0],
+            "the legacy single-favorite field must stay in sync"
+        );
+
+        // Both pills must be reachable with the controller.
+        let widgets = timer.focus_widgets();
+        let pills = widgets
+            .iter()
+            .filter(|w| {
+                w.downcast_ref::<gtk4::Button>()
+                    .and_then(|b| b.label())
+                    .map(|l| settings.favorite_presets.contains(&l.to_string()))
+                    .unwrap_or(false)
+            })
+            .count();
+        assert_eq!(
+            pills, 2,
+            "both favorite pills must be in the gamepad focus list"
+        );
+
+        win.close();
+        })
+    }
+
+    /// Plans-list gamepad shortcuts: X favorites (and the list resorts
+    /// favorites-first with focus kept), Y duplicates, R2 progresses a
+    /// plan that has a completed session (regression for the
+    /// "favorites/duplicate/progress unreachable with the controller"
+    /// bugs).
+    #[test]
+    fn plans_list_gamepad_shortcuts() {
+        run_in_gtk(|| {
+        let data_dir = fresh_data_dir();
+        let plan_id = {
+            std::fs::create_dir_all(&data_dir).unwrap();
+            let store = crate::data_store::DataStore::new();
+            let plan = test_plan();
+            let mut other = test_plan();
+            other.name = "Aardvark Plan".to_string();
+            store.save_plan(&plan);
+            store.save_plan(&other);
+            let session = crate::models::TrainingSession {
+                plan_id: plan.id.clone(),
+                exercises: vec![crate::models::ExerciseLog {
+                    exercise_name: "Pushups".to_string(),
+                    planned_reps: Some(10),
+                    actual_reps: Some(10),
+                    completed: true,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            };
+            store.save_session(&session);
+            plan.id
+        };
+
+        let app = libadwaita::Application::builder().build();
+        let mw = crate::window::MainWindow::new(&app);
+        mw.gtk_window().present();
+        pump_main_loop(3);
+
+        for _ in 0..8 {
+            if mw.visible_tab() == "plans" {
+                break;
+            }
+            mw.on_controller_action("r1");
+            pump_main_loop(1);
+        }
+        assert_eq!(mw.visible_tab(), "plans");
+
+        let tp = mw.training_plan.clone();
+        assert_eq!(tp.plans_order().len(), 2);
+
+        // Unfavorited list is alphabetical: Aardvark Plan first, the
+        // test plan second.
+        mw.on_controller_action("dpad_down");
+        mw.on_controller_action("dpad_down");
+        pump_main_loop(1);
+
+        // X favorites the focused plan: it must jump to the top of the
+        // list, and focus must stay on it.
+        mw.on_controller_action("x");
+        pump_main_loop(2);
+        {
+            let plans = crate::data_store::DataStore::new().load_plans();
+            let fav = plans
+                .iter()
+                .find(|p| p.id == plan_id)
+                .expect("the test plan must still exist");
+            assert!(fav.is_favorite, "X must favorite the focused plan");
+        }
+        assert_eq!(
+            tp.plans_order().first().map(|s| s.to_string()),
+            Some(plan_id.clone()),
+            "the favorited plan must sort to the top of the list"
+        );
+        assert_eq!(tp.plans_order().len(), 2);
+
+        // Y duplicates the focused plan.
+        mw.on_controller_action("y");
+        pump_main_loop(2);
+        {
+            let plans = crate::data_store::DataStore::new().load_plans();
+            assert_eq!(plans.len(), 3, "Y must duplicate the focused plan");
+            assert!(
+                plans
+                    .iter()
+                    .any(|p| p.name == "Controller Test Plan (copy)"),
+                "the duplicate must be saved"
+            );
+        }
+
+        // Focus moved to the copy (an unfavorite); move back up to the
+        // favorite and progress it with R2.
+        mw.on_controller_action("dpad_up");
+        mw.on_controller_action("dpad_up");
+        pump_main_loop(1);
+        mw.on_controller_action("r2");
+        pump_main_loop(2);
+        {
+            let plans = crate::data_store::DataStore::new().load_plans();
+            assert_eq!(plans.len(), 4, "R2 must create a progression plan");
+            let prog = plans
+                .iter()
+                .find(|p| p.name == "Controller Test Plan (progression)")
+                .expect("R2 must create a \"(progression)\" plan");
+            let pushups = prog
+                .exercises
+                .iter()
+                .find(|e| e.name == "Pushups")
+                .expect("the progression must keep the exercises");
+            assert_eq!(
+                pushups.reps,
+                Some(11),
+                "progression must bump the completed exercise by one rep"
+            );
+        }
+
+        mw.gtk_window().close();
         })
     }
 
