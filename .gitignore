@@ -14,3 +14,5 @@ flatpak_build.log
 # would break every clean checkout (no vendor/ dir there); checkouts and
 # the Flatpak builds resolve crates normally.
 /.cargo/config.toml
+# Materialized offline CARGO_HOME for CI-style test runs.
+/.ci-cargo

@@ -26,13 +26,15 @@ jobs:
         run: >
           flatpak-builder --user --install -y --force-clean
           --repo=test-repo build-dir/ io.github.NikolausB.WorkoutTimer.yml
+      - name: Materialize the offline cargo home
+        run: python3 .github/scripts/materialize-cargo-home.py cargo-sources.json .ci-cargo
       - name: Run cargo test in the SDK sandbox
         run: >
           xvfb-run -a -s "-screen 0 1280x1024x24 -ac" flatpak run --user
           --runtime=org.gnome.Sdk --runtime-version=51
           --command=sh
           --env=DISPLAY="$DISPLAY" --env=SRCDIR="$PWD"
-          --env=CARGO_HOME=/tmp/cargo-home
+          --env=CARGO_HOME="$PWD/.ci-cargo" --env=CARGO_NET_OFFLINE=true
           --filesystem="$PWD"
           io.github.NikolausB.WorkoutTimer
           -c 'cd "$SRCDIR" && export PATH=/usr/lib/sdk/rust-stable/bin:$PATH && cargo test'
