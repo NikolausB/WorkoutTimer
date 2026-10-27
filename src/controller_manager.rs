@@ -124,7 +124,10 @@ fn get_device_name(path: &str) -> Option<String> {
     use std::fs::File;
     use std::os::fd::FromRawFd;
 
-    let fd = unsafe { libc::open(format!("{}\0", path).as_ptr() as *const i8, libc::O_RDONLY) };
+    let fd = unsafe {
+        let c_path = std::ffi::CString::new(path).unwrap_or_default();
+        libc::open(c_path.as_ptr(), libc::O_RDONLY)
+    };
     if fd < 0 {
         return None;
     }
@@ -146,7 +149,10 @@ fn get_js_device_name(path: &str) -> String {
     use std::fs::File;
     use std::os::fd::FromRawFd;
 
-    let fd = unsafe { libc::open(format!("{}\0", path).as_ptr() as *const i8, libc::O_RDONLY) };
+    let fd = unsafe {
+        let c_path = std::ffi::CString::new(path).unwrap_or_default();
+        libc::open(c_path.as_ptr(), libc::O_RDONLY)
+    };
     if fd < 0 {
         return path.to_string();
     }
@@ -245,7 +251,10 @@ fn eviocgabs(code: u16) -> u64 {
 /// (xpad: 0-255, xpadneo: 0-1023, …). Falls back to the common 0-255.
 fn read_trigger_ranges(path: &str) -> std::collections::HashMap<u16, (i32, i32)> {
     let mut ranges = std::collections::HashMap::new();
-    let fd = unsafe { libc::open(format!("{}\0", path).as_ptr() as *const i8, libc::O_RDONLY) };
+    let fd = unsafe {
+        let c_path = std::ffi::CString::new(path).unwrap_or_default();
+        libc::open(c_path.as_ptr(), libc::O_RDONLY)
+    };
     if fd < 0 {
         return ranges;
     }
@@ -280,7 +289,10 @@ fn is_gamepad_capability(path: &str) -> bool {
     use std::fs::File;
     use std::os::fd::FromRawFd;
 
-    let fd = unsafe { libc::open(format!("{}\0", path).as_ptr() as *const i8, libc::O_RDONLY) };
+    let fd = unsafe {
+        let c_path = std::ffi::CString::new(path).unwrap_or_default();
+        libc::open(c_path.as_ptr(), libc::O_RDONLY)
+    };
     if fd < 0 {
         return false;
     }
@@ -537,10 +549,8 @@ fn evdev_read_loop(
     manager: glib::WeakRef<ControllerManager>,
 ) {
     let fd = unsafe {
-        libc::open(
-            format!("{}\0", path).as_ptr() as *const i8,
-            libc::O_RDONLY | libc::O_NONBLOCK,
-        )
+        let c_path = std::ffi::CString::new(path.clone()).unwrap_or_default();
+        libc::open(c_path.as_ptr(), libc::O_RDONLY | libc::O_NONBLOCK)
     };
     if fd < 0 {
         eprintln!("[ControllerManager] Could not open {}: {}", path, std::io::Error::last_os_error());
@@ -718,10 +728,8 @@ fn js_read_loop(
     manager: glib::WeakRef<ControllerManager>,
 ) {
     let fd = unsafe {
-        libc::open(
-            format!("{}\0", path).as_ptr() as *const i8,
-            libc::O_RDONLY | libc::O_NONBLOCK,
-        )
+        let c_path = std::ffi::CString::new(path.clone()).unwrap_or_default();
+        libc::open(c_path.as_ptr(), libc::O_RDONLY | libc::O_NONBLOCK)
     };
     if fd < 0 {
         eprintln!("[ControllerManager] Could not open {}: {}", path, std::io::Error::last_os_error());
