@@ -14,10 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install flatpak-builder + xvfb
-        run: |
-          sudo add-apt-repository -y ppa:flatpak/stable
-          sudo apt-get update
-          sudo apt-get install -y flatpak-builder xvfb
+        run: sudo apt-get update && sudo apt-get install -y flatpak-builder xvfb
       - name: Add Flathub remote
         run: flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
       - name: Install runtimes
@@ -47,14 +44,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install flatpak-builder
-        run: |
-          sudo add-apt-repository -y ppa:flatpak/stable
-          sudo apt-get update
-          sudo apt-get install -y flatpak-builder
+        run: sudo apt-get update && sudo apt-get install -y flatpak-builder
       - name: Add Flathub remote
         run: flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
       - name: Install runtimes
-        run: flatpak install --user -y flathub org.gnome.Platform//51 org.gnome.Sdk//51 org.flatpak.Builder
+        # The rust-stable extension must be pre-installed at its real branch:
+        # flatpak-builder only resolves the unversioned sdk-extension via
+        # the SDK's metadata when it is already present, otherwise it falls
+        # back to the non-existent runtime-version branch (51).
+        run: >
+          flatpak install --user -y flathub
+          org.gnome.Platform//51 org.gnome.Sdk//51
+          org.freedesktop.Sdk.Extension.rust-stable//26.08
+          org.flatpak.Builder
       - name: Build
         run: flatpak-builder --user --repo=repo --force-clean build-dir/ io.github.NikolausB.WorkoutTimer.yml
       - name: Lint manifest
