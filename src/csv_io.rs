@@ -323,7 +323,16 @@ mod tests {
         // and with a timezone offset (Rust-write → Python-read is also fine)
         let json_tz = json.replace("19:11:34.120317", "19:11:34.120317+02:00");
         let s2: TrainingSession = serde_json::from_str(&json_tz).unwrap();
-        assert_eq!(s2.started_at.format("%H:%M").to_string(), "19:11");
+        // The stored value is converted to the machine's local timezone,
+        // so assert on the absolute instant (TZ-independent): the
+        // +02:00 timestamp is 17:11:34 UTC.
+        assert_eq!(
+            s2.started_at
+                .with_timezone(&chrono::Utc)
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string(),
+            "2026-04-21 17:11:34"
+        );
     }
 
     #[test]
