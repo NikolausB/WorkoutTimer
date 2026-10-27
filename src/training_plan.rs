@@ -821,10 +821,11 @@ impl TrainingPlanPage {
     // ---------- Plans list ----------
 
     pub fn refresh_plans(&self) {
-        let mut idx = 0;
-        while let Some(row) = self.plan_list_box.row_at_index(idx) {
+        // Always pop index 0: after removing a row the remaining rows
+        // shift down, so advancing the index instead would skip every
+        // second row and leave stale duplicates behind.
+        while let Some(row) = self.plan_list_box.row_at_index(0) {
             self.plan_list_box.remove(&row);
-            idx += 1;
         }
         self.star_buttons.borrow_mut().clear();
 
@@ -2075,6 +2076,17 @@ impl TrainingPlanPage {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn plans_order(&self) -> Vec<String> {
         self.plans.borrow().iter().map(|p| p.id.clone()).collect()
+    }
+
+    /// Number of rows in the plans list — used by the ui tests to
+    /// verify that a refresh does not leave stale duplicate rows.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn plans_row_count(&self) -> usize {
+        let mut n = 0;
+        while self.plan_list_box.row_at_index(n as i32).is_some() {
+            n += 1;
+        }
+        n
     }
 
     /// The gamepad focus list of the runner, in visual order — used by

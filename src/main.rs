@@ -1253,6 +1253,11 @@ mod ui_tests {
 
         let tp = mw.training_plan.clone();
         assert_eq!(tp.plans_order().len(), 2);
+        assert_eq!(
+            tp.plans_row_count(),
+            2,
+            "the freshly loaded list must not carry stale rows"
+        );
 
         // Unfavorited list is alphabetical: Aardvark Plan first, the
         // test plan second.
@@ -1264,6 +1269,11 @@ mod ui_tests {
         // list, and focus must stay on it.
         mw.on_controller_action("x");
         pump_main_loop(2);
+        assert_eq!(
+            tp.plans_row_count(),
+            2,
+            "refreshing after a favorite must not leave stale duplicate rows"
+        );
         {
             let plans = crate::data_store::DataStore::new().load_plans();
             let fav = plans
@@ -1279,6 +1289,28 @@ mod ui_tests {
         );
         assert_eq!(tp.plans_order().len(), 2);
 
+        // X again must toggle the favorite off (the controller toggle
+        // used to hit the wrong plan after a refresh left stale rows).
+        mw.on_controller_action("x");
+        pump_main_loop(2);
+        assert_eq!(
+            tp.plans_row_count(),
+            2,
+            "refreshing must not leave stale duplicate rows"
+        );
+        {
+            let plans = crate::data_store::DataStore::new().load_plans();
+            let fav = plans
+                .iter()
+                .find(|p| p.id == plan_id)
+                .expect("the test plan must still exist");
+            assert!(!fav.is_favorite, "X must unfavorite again");
+        }
+        // Re-favorite for the rest of the test.
+        mw.on_controller_action("x");
+        pump_main_loop(2);
+        assert_eq!(tp.plans_row_count(), 2);
+
         // Y duplicates the focused plan.
         mw.on_controller_action("y");
         pump_main_loop(2);
@@ -1292,6 +1324,11 @@ mod ui_tests {
                 "the duplicate must be saved"
             );
         }
+        assert_eq!(
+            tp.plans_row_count(),
+            3,
+            "refreshing after a duplicate must not leave stale duplicate rows"
+        );
 
         // Focus moved to the copy (an unfavorite); move back up to the
         // favorite and progress it with R2.
@@ -1303,6 +1340,11 @@ mod ui_tests {
         {
             let plans = crate::data_store::DataStore::new().load_plans();
             assert_eq!(plans.len(), 4, "R2 must create a progression plan");
+            assert_eq!(
+                tp.plans_row_count(),
+                4,
+                "refreshing after a progression must not leave stale duplicate rows"
+            );
             let prog = plans
                 .iter()
                 .find(|p| p.name == "Controller Test Plan (progression)")
