@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install flatpak + xvfb
-        run: sudo apt-get update && sudo apt-get install -y flatpak xvfb
+        run: sudo apt-get update && sudo apt-get install -y flatpak dbus xvfb
       - name: Add Flathub remote
         run: flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
       - name: Install runtimes
@@ -26,11 +26,15 @@ jobs:
       # flathub-build bundles a current flatpak-builder + flatpak; the runner's
       # apt flatpak is too old for the --device-if conditional (flatpak 1.17+).
       # The wrapper supplies its own builddir/repo/force-clean, so only pass
-      # options and the manifest.
-      - name: Build and install the app
+      # options and the manifest. Its flatpak needs a session D-Bus, which
+      # headless runners don't have - dbus-run-session provides one.
+      - name: Build the app
         run: >
+          dbus-run-session --
           flatpak run --command=flathub-build org.flatpak.Builder
-          --install -y io.github.NikolausB.WorkoutTimer.yml
+          io.github.NikolausB.WorkoutTimer.yml
+      - name: Install the app
+        run: flatpak install --user -y --noninteractive repo io.github.NikolausB.WorkoutTimer
       - name: Materialize the offline cargo home
         run: python3 .github/scripts/materialize-cargo-home.py cargo-sources.json .ci-cargo
       - name: Run cargo test in the SDK sandbox
@@ -54,7 +58,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install flatpak
-        run: sudo apt-get update && sudo apt-get install -y flatpak
+        run: sudo apt-get update && sudo apt-get install -y flatpak dbus
       - name: Add Flathub remote
         run: flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
       - name: Install runtimes
@@ -68,7 +72,7 @@ jobs:
           org.freedesktop.Sdk.Extension.rust-stable//26.08
           org.flatpak.Builder
       - name: Build
-        run: flatpak run --command=flathub-build org.flatpak.Builder io.github.NikolausB.WorkoutTimer.yml
+        run: dbus-run-session -- flatpak run --command=flathub-build org.flatpak.Builder io.github.NikolausB.WorkoutTimer.yml
       - name: Lint manifest
         run: timeout 300 flatpak run --user --command=flatpak-builder-lint org.flatpak.Builder manifest io.github.NikolausB.WorkoutTimer.yml
         continue-on-error: true
