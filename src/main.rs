@@ -1365,6 +1365,92 @@ mod ui_tests {
         })
     }
 
+    /// The favorite switch in the plan editor must persist immediately
+    /// when toggled with the gamepad, and pressing Save Plan must keep
+    /// the favorite state (regression for the "favorite toggle in the
+    /// plan details does not work" bug).
+    #[test]
+    fn editor_favorite_toggle_gamepad() {
+        run_in_gtk(|| {
+        let data_dir = fresh_data_dir();
+        let plan_id = {
+            std::fs::create_dir_all(&data_dir).unwrap();
+            let store = crate::data_store::DataStore::new();
+            let plan = test_plan();
+            store.save_plan(&plan);
+            plan.id
+        };
+
+        let app = libadwaita::Application::builder().build();
+        let mw = crate::window::MainWindow::new(&app);
+        mw.gtk_window().present();
+        pump_main_loop(3);
+
+        for _ in 0..8 {
+            if mw.visible_tab() == "plans" {
+                break;
+            }
+            mw.on_controller_action("r1");
+            pump_main_loop(1);
+        }
+        assert_eq!(mw.visible_tab(), "plans");
+
+        // One dpad_down: New Plan -> the only plan row; A opens it.
+        mw.on_controller_action("dpad_down");
+        mw.on_controller_action("a");
+        pump_main_loop(2);
+        assert_eq!(mw.training_plan.visible_page(), "editor");
+
+        // Focus starts on the name entry; one dpad_down lands on the
+        // favorite switch. A must toggle it (like on the round timer
+        // page; it used to only grab focus and do nothing).
+        mw.on_controller_action("dpad_down");
+        mw.on_controller_action("a");
+        pump_main_loop(2);
+        {
+            let plans = crate::data_store::DataStore::new().load_plans();
+            let plan = plans.iter().find(|p| p.id == plan_id).unwrap();
+            assert!(
+                plan.is_favorite,
+                "A on the favorite switch must persist the favorite"
+            );
+        }
+
+        // A again toggles the switch back off — and on again, so the
+        // rest of the test runs with the favorite set.
+        mw.on_controller_action("a");
+        pump_main_loop(2);
+        {
+            let plans = crate::data_store::DataStore::new().load_plans();
+            let plan = plans.iter().find(|p| p.id == plan_id).unwrap();
+            assert!(!plan.is_favorite, "A must toggle the favorite off again");
+        }
+        mw.on_controller_action("dpad_right");
+        pump_main_loop(2);
+
+        // Walk down to "Save Plan" and press A: the favorite must
+        // survive the explicit save.
+        // Focus order: name entry, favorite switch, rounds, rest,
+        // add, browse, 2 exercise rows, Start Training, Save Plan.
+        for _ in 0..7 {
+            mw.on_controller_action("dpad_down");
+        }
+        mw.on_controller_action("a");
+        pump_main_loop(2);
+        {
+            let plans = crate::data_store::DataStore::new().load_plans();
+            assert_eq!(plans.len(), 1, "Save must not create a duplicate plan");
+            let plan = plans.iter().find(|p| p.id == plan_id).unwrap();
+            assert!(
+                plan.is_favorite,
+                "Save Plan must keep the favorite state"
+            );
+        }
+
+        mw.gtk_window().close();
+        })
+    }
+
     /// Every context the help page lists must have hint text, and the
     /// new dialog contexts (picker, form, alert) must be listed.
     #[test]

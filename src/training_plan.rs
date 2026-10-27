@@ -2422,6 +2422,10 @@ impl TrainingPlanPage {
                         btn.emit_clicked();
                     } else if let Some(row) = widget.downcast_ref::<ButtonRow>() {
                         row.activate();
+                    } else if let Some(switch) = widget.downcast_ref::<SwitchRow>() {
+                        // A toggles switches, like on the round timer
+                        // page (dpad left/right toggle them too).
+                        switch.set_active(!switch.is_active());
                     } else {
                         widget.grab_focus();
                     }
