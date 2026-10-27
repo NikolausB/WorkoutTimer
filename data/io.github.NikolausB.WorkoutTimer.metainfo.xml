@@ -91,6 +91,77 @@
     <keyword>ai</keyword>
   </keywords>
   <releases>
+    <release version="1.4.1" date="2026-10-27">
+      <description>
+        <p>
+          Controller and preset polish for Steam Deck and desktop gamepads.
+        </p>
+        <ul>
+          <li>Round timer: mark multiple favorite presets, delete custom presets, and save the current setup as a named custom preset with quick-start pills</li>
+          <li>Training plans: favorites are pinned to the top of the list, X toggles the favorite star, Y duplicates a plan, R2 creates a progression copy</li>
+          <li>Progression copies are percentage-based: +50% reps, +25% weight or +50% duration for everything completed last time</li>
+          <li>Gamepad: analog trigger support, L3 opens the Help window, R3 opens Preferences from any page, A toggles switches in the editor and activates Pause/+30s/Skip in the runner</li>
+          <li>Runner hints now show the B button "Stop Training" shortcut</li>
+        </ul>
+        <p>
+          Fixes:
+        </p>
+        <ul>
+          <li>The plans list refreshes whenever the page becomes visible again (edits, favorites and progressions show up immediately)</li>
+          <li>Gamepad focus works in the round timer setup, the presets dialog, the editor switches and the runner buttons</li>
+          <li>Favorite toggling no longer visually duplicates plans in the overview</li>
+          <li>Fixed crashes when leaving a running training and when opening exercise submenus with the controller</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.4.0" date="2026-10-20">
+      <description>
+        <p>
+          New features:
+        </p>
+        <ul>
+          <li>Progression tracking: personal records, estimated 1RM, volume load and adherence</li>
+          <li>New Progress page in the history with weekly volume and per-exercise records</li>
+          <li>“Progress this plan” creates a copy of a plan with more reps or weight</li>
+          <li>Round timer: prepare countdown, warm-up round, custom per-round intervals and a summary</li>
+          <li>History filters for plan and time period</li>
+          <li>First-run wizard that sets up starter plans</li>
+          <li>Undo for deleting plans, sessions and custom exercises</li>
+          <li>Help window with all keyboard and gamepad shortcuts</li>
+        </ul>
+        <p>
+          Fixes:
+        </p>
+        <ul>
+          <li>Gamepad buttons now work (the signal payload was read from the wrong argument)</li>
+          <li>AI Coach: streaming progress, reasoning display, cancel button and working error reporting</li>
+          <li>Scaled timer fonts are applied when a tab or the workout runner is opened</li>
+          <li>Plan list follows the visual order (plans between “New Plan” and Export/Import)</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.3.0" date="2026-10-11">
+      <description>
+        <p>Complete rewrite in Rust with a redesigned workout experience.</p>
+        <ul>
+          <li>Rewritten in Rust (GTK 4 / libadwaita) with identical data formats — plans, history, settings and CSV files stay fully compatible</li>
+          <li>Runner redesign: circular progress ring with countdown, overall workout progress bar, color-coded phases (GO / REST / BREAK), next-exercise card</li>
+          <li>Round timer redesign: progress ring, phase colors, and one-tap presets (Boxing, Tabata, HIIT, Endurance)</li>
+          <li>Home dashboard with weekly sessions, total training time, and day streak</li>
+          <li>History: weekly/monthly training chart, totals, and month-grouped session list</li>
+          <li>Preferences rebuilt on Adw.PreferencesDialog with sound volume control and full backup/restore</li>
+          <li>Toast notifications for save/import/export actions</li>
+          <li>Keyboard shortcuts: Space = start/pause, S = skip, R = reset</li>
+          <li>Desktop notifications when a round timer or training completes</li>
+          <li>+30s button during timed exercises and rests; ring dims while paused</li>
+          <li>Duplicate plans with one click; per-plan statistics in the editor</li>
+          <li>Exercise picker: category filter alongside search</li>
+          <li>Atomic data file writes, drift-free wall-clock timers, detailed import feedback</li>
+          <li>Window size and last tab are remembered between sessions</li>
+          <li>Flatpak runtime bumped to GNOME 51</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-07-27">
       <description>
         <p>Favorite plans, improved editor UX, persistent preferences, better virtual keyboard, richer history logging, and a tristate color scheme.</p>

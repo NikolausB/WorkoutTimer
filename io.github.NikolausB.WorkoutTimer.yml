@@ -1,7 +1,9 @@
 app-id: io.github.NikolausB.WorkoutTimer
 runtime: org.gnome.Platform
-runtime-version: '50'
+runtime-version: '51'
 sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
 command: training
 finish-args:
   - --socket=wayland
@@ -11,9 +13,30 @@ finish-args:
   - --device=all
   - --share=ipc
   - --share=network
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/training/cargo
+    CARGO_NET_OFFLINE: 'true'
 modules:
   - name: training
     buildsystem: meson
+    config-opts:
+      - --buildtype=release
+    builddir: true
     sources:
       - type: dir
         path: .
+      - cargo-sources.json
+      # Cargo source replacement pointing at the vendor layout extracted
+      # by cargo-sources.json (flathub-cargo-generator pattern), so the
+      # build is fully offline - no crate index/network in the sandbox.
+      - type: inline
+        dest: .cargo
+        dest-filename: config
+        contents: |
+          [source.crates-io]
+          replace-with = "vendored-sources"
+
+          [source.vendored-sources]
+          directory = "cargo/vendor"

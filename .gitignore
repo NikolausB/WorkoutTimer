@@ -1,7 +1,18 @@
-__pycache__/
-*.pyc
-build-dir/
-.flatpak-builder/
-repo/
+/target
+/build-dir
+/local-build-dir
+*.cache
+/wt-repo
 *.flatpak
-.local/
+flatpak_build.log
+.flatpak-builder
+# Local offline crate mirror (~234 MB). Regenerate with
+# flatpak-cargo-generator.py / cargo vendor; the Flatpak manifests use
+# cargo-sources.json instead.
+/vendor
+# Local-only cargo source replacement pointing at /vendor. A tracked copy
+# would break every clean checkout (no vendor/ dir there); checkouts and
+# the Flatpak builds resolve crates normally.
+/.cargo/config.toml
+# Materialized offline CARGO_HOME for CI-style test runs.
+/.ci-cargo

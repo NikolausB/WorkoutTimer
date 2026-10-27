@@ -1,20 +1,25 @@
 # Workout Timer
 
-A sport training application for Linux, built with GTK 4 and libadwaita.
+A sport training application for Linux, built with GTK 4, libadwaita, and Rust.
 
 ## Features
 
 - **Home Page** — Quick access to continue your last workout, recommended plans, and browse all plans
-- **Round Timer** — Configurable rounds, duration, and pause periods with audio alerts
-- **Training Plan Builder** — Create plans with timed and rep-based exercises, multi-round circuits with configurable rest between rounds
-- **AI Coach** — Generate training plans with local LLMs (Ollama) or OpenAI-compatible APIs
+- **Round Timer** — Configurable rounds, duration, and pause periods with audio alerts, plus a prepare countdown, an optional warm-up round, custom per-round intervals (ladders like 20/40/60 s) and an activity title; the setup is remembered across restarts. Presets can be favorited (multiple favorites), custom setups can be saved as named presets, and favorite presets appear as quick-start pills
+- **Training Plan Builder** — Create plans with timed and rep-based exercises, multi-round circuits with configurable rest between rounds; favorite plans are pinned to the top of the list and can be duplicated or progressed with one controller button each
+- **Progression Tracking** — Personal records per exercise, estimated 1RM (Epley), volume load and adherence; the new **Progress** page in the history shows weekly volume and your records
+- **Progressive Overload Helper** — "Progress this plan" (R2 button) creates a copy of a plan with +50% reps, +25% weight or +50% duration for everything you actually completed last time
+- **AI Coach** — Generate training plans with local LLMs (Ollama) or OpenAI-compatible APIs; streams the answer, shows the model's reasoning phase, can be cancelled and reports errors properly
+- **First-Run Wizard** — Goal, equipment and weekly frequency, then matching starter plans are added automatically
 - **Built-in Exercise Database** — 873 exercises from [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (Unlicense)
-- **11 Default Training Plans** — Including pop culture-inspired plans (Saitama, Demon Slayer Corps, Rocky)
+- **11 Default Training Plans** — Including pop culture-inspired plans (Saitama, Demon Slayer Corps, Rocky); they can also be added as templates from the plans page
 - **Multi-Round Circuits** — Repeat all exercises for multiple rounds with configurable rest between rounds
-- **Training History** — Per-session detail with per-exercise logging (actual vs planned, plus start/end times), CSV export/import
+- **Training History** — Per-session detail with per-exercise logging (actual vs planned, plus start/end times), CSV export/import, and filters for plan and time period
+- **Undo** — Deleting a plan, a session or a custom exercise can be undone from the toast
+- **Help & Shortcuts** — A window (header button, `?` key, the Home entry or the L3 button) with every keyboard and gamepad shortcut
 - **Customizable Sounds** — Choose different sounds for round start, round end, exercise complete, round break, and training complete
 - **Fullscreen Mode** — Guide button (controller) or F11 key for distraction-free workouts
-- **Gamepad & Controller Support** — Full controller navigation for Steam Deck and desktop gamepads (Xbox, PlayStation, generic). D-pad focus cycling with visible outline, A/B/X/Y/Start/Select/Guide button mapping, trigger scrolling, and in-workout confirmation dialogs — all controller-navigable
+- **Gamepad & Controller Support** — Full controller navigation for Steam Deck and desktop gamepads (Xbox, PlayStation, 8BitDo, generic). D-pad focus cycling with visible outline, A/B/X/Y/Start/Select/Guide button mapping, analog trigger support, per-context hint bar, and in-workout confirmation dialogs — all controller-navigable
 - **Add Custom Exercises** — Add your own exercises to the built-in database
 - **Tab Visibility** — Show or hide tabs (Home, Timer, Training Plans, AI Coach) in Preferences
 
@@ -24,15 +29,16 @@ A sport training application for Linux, built with GTK 4 and libadwaita.
 |--------|--------|
 | D-pad ↑↓ | Focus cycle through page widgets |
 | D-pad ←→ | Adjust spin rows, cycle combo rows, toggle switches, navigate button rows |
-| A | Enter / activate focused widget (open plan, expand exercise, click button) |
-| B | Back / close (with confirmation before stopping workouts), backspace in keyboard |
-| X | Toggle exercise expander (editor), collapse expanded row (editor) |
-| Y | Skip rest (workout runner), toggle shift (virtual keyboard) |
-| Start | Pause / resume workout, start training from editor, save preferences |
-| Select | Open preferences (most pages), show virtual keyboard when a prompt is focused |
+| A | Enter / activate focused widget (open plan, expand exercise, click buttons, toggle switches in the editor; Pause, +30s and Skip in the runner) |
+| B | Back / close (with confirmation before stopping workouts — the runner hints show "B: Stop Training"), backspace in keyboard |
+| X | Toggle exercise expander (editor), collapse expanded row (editor), toggle favorite star (plans list and editor) |
+| Y | Skip rest or exercise (workout runner), duplicate plan (plans list), toggle shift (virtual keyboard) |
+| Start | Pause / resume workout, start training from editor, save preferences, start/pause the round timer |
+| Select | Show virtual keyboard when a prompt is focused |
 | Guide (Xbox/PS) | Toggle fullscreen on/off |
 | L1 / R1 | Switch to previous / next tab |
-| L2 / R2 | Scroll detail views (history, summaries) |
+| L2 / R2 | Scroll detail views (history, summaries); R2 in the plans list creates a progression copy of a plan |
+| L3 / R3 | L3 opens the Help & Shortcuts window, R3 opens Preferences (any page) |
 
 Controller hints are shown in the bottom-right corner of the screen when a gamepad is connected (can be toggled in Preferences).
 
@@ -73,7 +79,7 @@ Build and install locally:
 
 ```bash
 # Install runtimes
-flatpak install flathub org.gnome.Platform//50 org.gnome.Sdk//50
+flatpak install flathub org.gnome.Platform//51 org.gnome.Sdk//51
 flatpak install flathub org.flatpak.Builder
 
 # Build and install
@@ -88,9 +94,11 @@ flatpak run io.github.NikolausB.WorkoutTimer
 
 ```bash
 bash run.sh
+# or
+cargo run
 ```
 
-Requires: Python 3.9+, GTK 4, libadwaita, GStreamer, PyGObject
+Requires: Rust (rustup), GTK 4.18+, libadwaita 1.7+, GStreamer 1.x development packages.
 
 ## Multi-Round Circuits
 
@@ -126,6 +134,10 @@ Generated plans are automatically matched against the built-in exercise database
 ## Credits
 
 See [CREDITS.md](CREDITS.md) for full credits and third-party resources.
+
+## Acknowledgements
+
+This application — and its screenshots — was created with the help of AI.
 
 ## License
 

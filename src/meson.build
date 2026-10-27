@@ -1,42 +1,43 @@
 pkgdatadir = join_paths(get_option('datadir'), 'training')
 
-python_modules = [
-  '__init__.py',
-  'ai_coach.py',
-  'app_style.css',
-  'controller_focus.py',
-  'controller_hints.py',
-  'controller_manager.py',
-  'csv_io.py',
-  'data_store.py',
-  'exercise_picker.py',
-  'history.py',
-  'home.py',
-  'image_utils.py',
-  'llm_client.py',
-  'models.py',
-  'preferences.py',
-  'round_timer.py',
-  'settings.py',
-  'sound.py',
-  'timer_core.py',
-  'training_plan.py',
-  'ui_scaling.py',
-  'user_exercises.py',
-  'virtual_keyboard.py',
-  'window.py',
-]
+cargo = find_program('cargo', required: true)
 
-install_data(
-  python_modules,
-  install_dir: pkgdatadir,
+cargo_options = ['--manifest-path', meson.project_source_root() / 'Cargo.toml']
+cargo_options += ['--target-dir', meson.project_build_root() / 'target']
+cargo_options += ['--release']
+rust_target = 'release'
+
+# Honor the flatpak manifest's CARGO_HOME / CARGO_NET_OFFLINE: the
+# cargo-sources.json vendor layout lives inside that CARGO_HOME. Only
+# fall back to a build-dir cargo home for plain meson builds outside
+# flatpak (which then resolve crates over the network).
+cargo_home = run_command('sh', '-c', 'printf %s "${CARGO_HOME:-}"', check: true).stdout()
+if cargo_home == ''
+  cargo_home = meson.project_build_root() / 'cargo-home'
+endif
+cargo_net_offline = run_command('sh', '-c', 'printf %s "${CARGO_NET_OFFLINE:-false}"', check: true).stdout()
+
+custom_target(
+  'cargo-build',
+  build_by_default: true,
+  build_always_stale: true,
+  output: 'training',
+  console: true,
+  install: true,
+  install_dir: bindir,
+  env: {
+    'CARGO_HOME': cargo_home,
+    'CARGO_NET_OFFLINE': cargo_net_offline,
+  },
+  command: [
+    cargo, 'build', cargo_options, '&&',
+    'cp', meson.project_build_root() / 'target' / rust_target / 'training', '@OUTPUT@',
+  ],
 )
 
 install_data(
-  'main.py',
-  install_dir: get_option('bindir'),
-  install_mode: 'rwxr-xr-x',
-  rename: 'training',
+  'app_style.css',
+  install_dir: pkgdatadir,
 )
 
 install_data(
