@@ -42,7 +42,10 @@ jobs:
   build:
     name: Flatpak build + lint
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Every run re-downloads the GNOME 51 runtime/SDK (~2 GB) and rebuilds
+    # all crates; runner network/disk speed varies a lot, so the build
+    # regularly takes anywhere from ~5 to 20+ minutes.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Install flatpak-builder
