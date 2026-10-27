@@ -111,10 +111,13 @@ pub(crate) type PresetsDialogRegistrar =
 pub(crate) struct PresetsDialogController {
     pub(crate) dialog: Dialog,
     pub(crate) tracker: Rc<RefCell<ControllerFocusTracker>>,
+    /// Hint-bar context while this dialog is open (see controller_hints.rs).
+    pub(crate) hints: &'static str,
 }
 
 impl PresetsDialogController {
-    /// Activate the focused widget (rows apply a preset, buttons click).
+    /// Activate the focused widget (rows apply a preset, buttons click,
+    /// entry rows take text focus).
     pub(crate) fn activate_focused(&self) {
         let widget = self.tracker.borrow().current_widget();
         if let Some(widget) = widget {
@@ -122,6 +125,8 @@ impl PresetsDialogController {
                 libadwaita::prelude::ActionRowExt::activate(row);
             } else if let Some(btn) = widget.downcast_ref::<gtk4::Button>() {
                 btn.emit_clicked();
+            } else {
+                widget.grab_focus();
             }
         }
     }
@@ -484,21 +489,12 @@ impl RoundTimerPage {
         dialog.set_content_height(520);
         dialog.set_follows_content_size(false);
 
-        // The save dialog can only be presented once this one has fully
-        // closed (Adw.Dialog close is asynchronous).
+        // Set when "Save current setup" is clicked; the save dialog can
+        // only be presented once this one has fully closed (Adw.Dialog
+        // close is asynchronous). The `closed` handler is connected below,
+        // AFTER the registration cleanup, so a save dialog opened from it
+        // keeps its own controller registration.
         let requested_save = Rc::new(Cell::new(false));
-        {
-            let page_weak = Rc::downgrade(self);
-            let requested_save = Rc::clone(&requested_save);
-            dialog.connect_closed(move |_| {
-                if requested_save.get() {
-                    requested_save.set(false);
-                    if let Some(p) = page_weak.upgrade() {
-                        p.show_save_preset_dialog();
-                    }
-                }
-            });
-        }
 
         let content = GtkBox::new(Orientation::Vertical, 12);
         content.set_margin_top(12);
@@ -542,8 +538,9 @@ impl RoundTimerPage {
             .selection_mode(gtk4::SelectionMode::None)
             .build();
 
-        // Preset rows in visual order, for the gamepad focus tracker.
-        let mut preset_rows: Vec<ActionRow> = Vec::new();
+        // Focusable widgets in visual order (row, then its suffix buttons),
+        // for the gamepad focus tracker.
+        let mut focus_widgets: Vec<gtk4::Widget> = Vec::new();
 
         if customs.is_empty() {
             let empty = Label::new(Some(
@@ -564,7 +561,7 @@ impl RoundTimerPage {
                 .subtitle(&preset_summary(&preset.config))
                 .activatable(true)
                 .build();
-            preset_rows.push(row.clone());
+            focus_widgets.push(row.clone().upcast());
 
             let star_icon = if preset.name == favorite {
                 "starred-symbolic"
@@ -577,6 +574,7 @@ impl RoundTimerPage {
                 .valign(Align::Center)
                 .tooltip_text("Favorite")
                 .build();
+            focus_widgets.push(star.clone().upcast());
             {
                 let page_weak = Rc::downgrade(self);
                 let name = preset.name.clone();
@@ -603,6 +601,7 @@ impl RoundTimerPage {
                     .valign(Align::Center)
                     .tooltip_text("Delete preset")
                     .build();
+                focus_widgets.push(delete.clone().upcast());
                 {
                     let page_weak = Rc::downgrade(self);
                     let name = preset.name.clone();
@@ -677,16 +676,13 @@ impl RoundTimerPage {
             let registrar = self.presets_dialog_registrar.borrow().clone();
             if let Some(cb) = registrar {
                 let mut tracker = ControllerFocusTracker::new();
-                let mut focus_widgets: Vec<gtk4::Widget> = Vec::new();
-                for row in &preset_rows {
-                    focus_widgets.push(row.clone().upcast());
-                }
                 focus_widgets.push(add_btn.clone().upcast());
                 focus_widgets.push(back_btn.clone().upcast());
-                tracker.set_widgets(focus_widgets);
+                tracker.set_widgets(focus_widgets.clone());
                 let controller = Rc::new(PresetsDialogController {
                     dialog: dialog.clone(),
                     tracker: Rc::new(RefCell::new(tracker)),
+                    hints: "presets",
                 });
                 cb(Some(Rc::clone(&controller)));
                 let cleanup: Rc<dyn Fn()> = {
@@ -697,6 +693,22 @@ impl RoundTimerPage {
                     cleanup();
                 });
             }
+        }
+
+        // Connected after the cleanup above so this runs last: opening the
+        // save dialog re-registers input routing without the cleanup
+        // wiping it again.
+        {
+            let page_weak = Rc::downgrade(self);
+            let requested_save = Rc::clone(&requested_save);
+            dialog.connect_closed(move |_| {
+                if requested_save.get() {
+                    requested_save.set(false);
+                    if let Some(p) = page_weak.upgrade() {
+                        p.show_save_preset_dialog();
+                    }
+                }
+            });
         }
 
         if let Some(root) = self
@@ -762,6 +774,31 @@ impl RoundTimerPage {
         content.append(&save_btn);
 
         dialog.set_child(Some(&content));
+
+        // Register the dialog so the gamepad can drive it (dpad cycles
+        // between the name entry and Save, A activates, B closes).
+        {
+            let registrar = self.presets_dialog_registrar.borrow().clone();
+            if let Some(cb) = registrar {
+                let mut tracker = ControllerFocusTracker::new();
+                tracker.set_widgets(vec![
+                    name_entry.clone().upcast(),
+                    save_btn.clone().upcast(),
+                ]);
+                let tracker = Rc::new(RefCell::new(tracker));
+                tracker.borrow_mut().focus_first();
+                let controller = Rc::new(PresetsDialogController {
+                    dialog: dialog.clone(),
+                    tracker,
+                    hints: "form",
+                });
+                cb(Some(Rc::clone(&controller)));
+                dialog.connect_closed(move |_| {
+                    cb(None);
+                });
+            }
+        }
+
         if let Some(root) = self
             .widget
             .root()

@@ -585,7 +585,6 @@ impl TrainingPlanPage {
         }
     }
 
-    #[allow(dead_code)]
     pub fn nav(&self) -> &NavigationView {
         &self.nav
     }
@@ -1891,6 +1890,7 @@ impl TrainingPlanPage {
 
     fn start_round_break(&self) {
         self.phase.set(Phase::RoundBreak);
+        self.refresh_runner_hints();
         self.current_round.set(self.current_round.get() + 1);
         self.current_exercise_idx.set(0);
         self.current_set.set(1);
@@ -2010,6 +2010,16 @@ impl TrainingPlanPage {
             .push(ex_log);
         self.reps_revealer.set_reveal_child(false);
         self.start_rest();
+    }
+
+    /// The pause/resume button label ("Pause" or "Resume") — used by the
+    /// ui tests to observe the runner's paused state.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn runner_pause_label(&self) -> String {
+        self.runner_pause_btn
+            .label()
+            .map(|s| s.to_string())
+            .unwrap_or_default()
     }
 
     fn on_runner_pause(&self) {
@@ -2157,8 +2167,12 @@ impl TrainingPlanPage {
         self.summary_exercises_box.append(&group);
     }
 
+    /// The runner hint bar is phase-dependent ([A] Done vs. rest/skip);
+    /// refresh it whenever the phase changes.
     fn refresh_runner_hints(&self) {
-        let _ = self;
+        if let Some(window) = crate::window::current_window() {
+            window.update_hints_visibility();
+        }
     }
 
     fn confirm_stop_workout(&self) {
@@ -2267,6 +2281,18 @@ impl TrainingPlanPage {
     pub fn controller_a(&self) {
         match self.visible_page() {
             "runner" => {
+                // A activates whatever runner button has focus (Pause,
+                // +30s, Skip, Done). The widget is cloned out of the
+                // borrow first: clicking rebuilds focus lists.
+                let focused = self.runner_focus.borrow().current_widget();
+                if let Some(widget) = focused {
+                    if let Some(btn) = widget.downcast_ref::<Button>() {
+                        if btn.is_sensitive() {
+                            btn.emit_clicked();
+                            return;
+                        }
+                    }
+                }
                 if self.phase.get() == Phase::Exercise {
                     if let Some(plan) = self.running_plan.borrow().clone() {
                         let ex = &plan.exercises[self.current_exercise_idx.get()];

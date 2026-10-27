@@ -766,6 +766,342 @@ mod ui_tests {
         })
     }
 
+    /// Regression for the "gamepad freezes after Browse Exercises" bug:
+    /// the picker dialog must unregister itself when it closes (instead
+    /// of swallowing every controller action forever), and the
+    /// add-exercise form must take over routing and hand it back.
+    #[test]
+    fn picker_dialog_controller_flow() {
+        run_in_gtk(|| {
+        use std::cell::RefCell;
+        let _data_dir = fresh_data_dir();
+
+        let app = libadwaita::Application::builder().build();
+        let mw = crate::window::MainWindow::new(&app);
+        mw.gtk_window().present();
+        pump_main_loop(3);
+
+        let selected: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
+        let selected_cb = Rc::clone(&selected);
+        let picker = crate::exercise_picker::ExercisePicker::new(move |name, _| {
+            *selected_cb.borrow_mut() = Some(name.to_string());
+        });
+        picker.present_over_window();
+        pump_main_loop(2);
+        assert!(
+            mw.has_open_dialog(),
+            "presenting the picker must register it for controller input"
+        );
+
+        // The add-exercise form takes over routing while it is open...
+        picker.show_add_exercise_form();
+        pump_main_loop(2);
+        assert!(
+            mw.has_open_dialog(),
+            "the add-exercise form must be registered while open"
+        );
+
+        // ...and B (through the window routing) closes it and hands
+        // routing back to the still-open picker list.
+        mw.on_controller_action("b");
+        pump_main_loop(3);
+        assert!(
+            mw.has_open_dialog(),
+            "after the form closes, the picker list must be re-registered"
+        );
+
+        // Selecting an exercise with dpad + A must close the picker AND
+        // unregister it — the old code left the dead dialog registered,
+        // freezing all gamepad input.
+        mw.on_controller_action("dpad_down");
+        mw.on_controller_action("a");
+        pump_main_loop(3);
+        assert!(
+            !mw.has_open_dialog(),
+            "closing the picker must unregister it (gamepad freeze regression)"
+        );
+        assert!(
+            selected.borrow().is_some(),
+            "A on a picker row must select the exercise"
+        );
+        })
+    }
+
+    /// Gamepad coverage for the presets dialog: star/delete buttons must
+    /// be in the focus list (not mouse-only), and "Save current setup"
+    /// must produce a gamepad-drivable save dialog that really saves.
+    #[test]
+    fn presets_dialog_gamepad_reach() {
+        run_in_gtk(|| {
+        use std::cell::RefCell;
+        let _data_dir = fresh_data_dir();
+
+        let timer = crate::round_timer::RoundTimerPage::new(Rc::new(
+            crate::sound::SoundPlayer::new(),
+        ));
+        let win = gtk4::Window::new();
+        win.set_child(Some(timer.widget()));
+        win.present();
+        pump_main_loop(2);
+
+        let registered: Rc<RefCell<Option<Rc<crate::round_timer::PresetsDialogController>>>> =
+            Rc::new(RefCell::new(None));
+        {
+            let registered = Rc::clone(&registered);
+            timer.set_presets_dialog_registrar(Rc::new(move |c| {
+                *registered.borrow_mut() = c;
+            }));
+        }
+
+        // Open the presets dialog via the gamepad path (dpad to the
+        // presets button, A to activate).
+        let widgets = timer.focus_widgets();
+        let presets_idx = widgets
+            .iter()
+            .position(|w| {
+                w.downcast_ref::<gtk4::Button>()
+                    .and_then(|b| b.label())
+                    .map(|l| l.starts_with("Presets"))
+                    .unwrap_or(false)
+            })
+            .expect("the presets button must be in the focus list");
+        for _ in 0..=presets_idx {
+            timer.controller_dpad_down();
+        }
+        timer.controller_a();
+        pump_main_loop(2);
+
+        let controller = registered
+            .borrow()
+            .clone()
+            .expect("the presets dialog must be registered while open");
+
+        // Every builtin preset row must bring its star button into the
+        // focus list — starring used to be mouse-only.
+        let dialog_widgets = controller.tracker.borrow().widgets();
+        let rows = dialog_widgets
+            .iter()
+            .filter(|w| w.is::<libadwaita::ActionRow>())
+            .count();
+        let stars = dialog_widgets
+            .iter()
+            .filter(|w| {
+                w.downcast_ref::<gtk4::Button>()
+                    .and_then(|b| b.icon_name())
+                    .map(|i| {
+                        i.as_str() == "non-starred-symbolic"
+                            || i.as_str() == "starred-symbolic"
+                    })
+                    .unwrap_or(false)
+            })
+            .count();
+        assert!(rows >= 3, "builtin presets must be listed, found {rows}");
+        assert_eq!(
+            stars, rows,
+            "each preset row must have its star button in the focus list"
+        );
+
+        // Star the first builtin preset with the gamepad: row is focused
+        // first, one dpad_down lands on its star.
+        controller.tracker.borrow_mut().focus_first();
+        controller.tracker.borrow_mut().cycle(1);
+        controller.activate_focused();
+        pump_main_loop(3);
+        assert!(
+            registered.borrow().is_none(),
+            "starring must close the dialog and unregister it"
+        );
+        assert!(
+            !crate::settings::load_settings().favorite_preset.is_empty(),
+            "A on the star button must favorite the preset"
+        );
+
+        // Reopen (the presets button still has focus on the page) and
+        // drive the "Save current setup" flow entirely by gamepad.
+        timer.controller_a();
+        pump_main_loop(2);
+        let controller = registered
+            .borrow()
+            .clone()
+            .expect("the presets dialog must re-register on reopen");
+        {
+            let widgets = controller.tracker.borrow().widgets();
+            let add_btn = widgets
+                .iter()
+                .find(|w| {
+                    w.downcast_ref::<gtk4::Button>()
+                        .and_then(|b| b.label())
+                        .map(|l| l.contains("Save current setup"))
+                        .unwrap_or(false)
+                })
+                .expect("the save-current-setup button must be focusable")
+                .clone();
+            controller.tracker.borrow_mut().move_to_widget(&add_btn);
+            controller.activate_focused();
+        }
+        pump_main_loop(3);
+        let save_controller = registered
+            .borrow()
+            .clone()
+            .expect("the save-preset dialog must be registered while open");
+        {
+            let widgets = save_controller.tracker.borrow().widgets();
+            let entry = widgets
+                .iter()
+                .find(|w| w.is::<libadwaita::EntryRow>())
+                .expect("the name entry must be in the focus list")
+                .clone();
+            let save_btn = widgets
+                .iter()
+                .find(|w| {
+                    w.downcast_ref::<gtk4::Button>()
+                        .and_then(|b| b.label())
+                        .map(|l| l == "Save")
+                        .unwrap_or(false)
+                })
+                .expect("the Save button must be in the focus list")
+                .clone();
+            entry.set_property("text", "CI Preset");
+            save_controller.tracker.borrow_mut().move_to_widget(&save_btn);
+            save_controller.activate_focused();
+        }
+        pump_main_loop(3);
+        assert!(
+            registered.borrow().is_none(),
+            "saving must close the save dialog and unregister it"
+        );
+        assert!(
+            crate::settings::load_settings()
+                .timer_presets
+                .iter()
+                .any(|p| p.name == "CI Preset"),
+            "the gamepad-driven save flow must persist the preset"
+        );
+
+        // The saved custom preset must expose a delete button in the
+        // focus list (deleting used to be mouse-only).
+        timer.controller_a();
+        pump_main_loop(2);
+        let controller = registered
+            .borrow()
+            .clone()
+            .expect("the presets dialog must re-register on reopen");
+        {
+            let widgets = controller.tracker.borrow().widgets();
+            let delete = widgets
+                .iter()
+                .find(|w| {
+                    w.downcast_ref::<gtk4::Button>()
+                        .and_then(|b| b.icon_name())
+                        .map(|i| i.as_str() == "user-trash-symbolic")
+                        .unwrap_or(false)
+                })
+                .expect("the custom preset's delete button must be focusable")
+                .clone();
+            controller.tracker.borrow_mut().move_to_widget(&delete);
+            controller.activate_focused();
+        }
+        pump_main_loop(3);
+        assert!(
+            !crate::settings::load_settings()
+                .timer_presets
+                .iter()
+                .any(|p| p.name == "CI Preset"),
+            "A on the delete button must remove the custom preset"
+        );
+
+        win.close();
+        })
+    }
+
+    /// A in the runner activates the focused button: Pause pauses, and
+    /// with the Skip button focused, A skips (regression for the
+    /// Steam Deck bug where A always meant Done/Skip regardless of
+    /// focus).
+    #[test]
+    fn runner_a_activates_focused_button() {
+        run_in_gtk(|| {
+        let data_dir = fresh_data_dir();
+        {
+            std::fs::create_dir_all(&data_dir).unwrap();
+            let store = crate::data_store::DataStore::new();
+            store.save_plan(&test_plan());
+        }
+
+        let app = libadwaita::Application::builder().build();
+        let mw = crate::window::MainWindow::new(&app);
+        mw.gtk_window().present();
+        pump_main_loop(3);
+
+        for _ in 0..8 {
+            if mw.visible_tab() == "plans" {
+                break;
+            }
+            mw.on_controller_action("r1");
+            pump_main_loop(1);
+        }
+        mw.on_controller_action("dpad_down");
+        mw.on_controller_action("a");
+        pump_main_loop(2);
+        mw.on_controller_action("start");
+        pump_main_loop(2);
+        assert_eq!(mw.training_plan.visible_page(), "runner");
+
+        // Default focus is the Pause button: A must pause, not skip.
+        assert_eq!(mw.training_plan.runner_pause_label(), "Pause");
+        mw.on_controller_action("a");
+        pump_main_loop(1);
+        assert_eq!(
+            mw.training_plan.runner_pause_label(),
+            "Resume",
+            "A with the Pause button focused must pause the workout"
+        );
+        mw.on_controller_action("a");
+        pump_main_loop(1);
+        assert_eq!(
+            mw.training_plan.runner_pause_label(),
+            "Pause",
+            "A again must resume the workout"
+        );
+
+        // One dpad_down moves focus to Skip (pause -> skip; the +30s
+        // button is insensitive at start and drops out of the list).
+        // A then skips: exercise, its rest, the next exercise and its
+        // rest — after that the workout is over and the summary shows.
+        // This is exactly the "A skips what I selected" behavior.
+        mw.on_controller_action("dpad_down");
+        for _ in 0..4 {
+            mw.on_controller_action("a");
+            pump_main_loop(2);
+        }
+        assert_eq!(
+            mw.training_plan.visible_page(),
+            "summary",
+            "A with the Skip button focused must skip each exercise and rest"
+        );
+        })
+    }
+
+    /// Every context the help page lists must have hint text, and the
+    /// new dialog contexts (picker, form, alert) must be listed.
+    #[test]
+    fn hint_contexts_complete() {
+        for (ctx, _) in crate::controller_hints::HINT_CONTEXTS {
+            assert!(
+                !crate::controller_hints::hints_for(ctx, "").is_empty(),
+                "missing hint text for context {ctx}"
+            );
+        }
+        for ctx in ["picker", "form", "alert", "presets"] {
+            assert!(
+                crate::controller_hints::HINT_CONTEXTS
+                    .iter()
+                    .any(|(c, _)| *c == ctx),
+                "context {ctx} must be listed in HINT_CONTEXTS"
+            );
+        }
+    }
+
     /// Live end-to-end generation through the real page pipeline:
     /// `cargo test -- --ignored ai_coach` (needs Ollama running).
     #[test]

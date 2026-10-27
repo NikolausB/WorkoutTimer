@@ -392,6 +392,20 @@ impl MainWindow {
                 }));
         }
 
+        // The plans page navigates internally (list / editor / runner /
+        // summary); the hint bar must follow those transitions immediately,
+        // not one screen late.
+        {
+            let mw_weak = Rc::downgrade(&mw);
+            mw.training_plan
+                .nav()
+                .connect_notify_local(Some("visible-page"), move |_, _| {
+                    if let Some(m) = mw_weak.upgrade() {
+                        m.update_hints_visibility();
+                    }
+                });
+        }
+
         mw.rebuild_tabs();
         mw.home.refresh();
 
@@ -578,11 +592,31 @@ impl MainWindow {
         gtk4::gsk::prelude::GskRendererExt::unrealize(&renderer);
     }
 
+    /// The exercise picker registers itself here while open; `None`
+    /// releases the registration when it closes (the picker calls this
+    /// from its `closed` handler — otherwise all controller input would
+    /// keep routing to a closed dialog and the gamepad appears dead).
     pub fn register_exercise_picker_dialog(
         &self,
-        picker: Rc<crate::exercise_picker::ExercisePicker>,
+        picker: Option<Rc<crate::exercise_picker::ExercisePicker>>,
     ) {
-        *self.open_dialog.borrow_mut() = Some(OpenDialog::ExercisePicker(picker));
+        match picker {
+            Some(p) => {
+                *self.open_dialog.borrow_mut() = Some(OpenDialog::ExercisePicker(p));
+                self.set_hints_context("picker");
+            }
+            None => {
+                *self.open_dialog.borrow_mut() = None;
+                self.update_hints_visibility();
+            }
+        }
+    }
+
+    /// Whether a dialog currently owns the controller input routing
+    /// (used by the ui tests to verify registration/cleanup).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn has_open_dialog(&self) -> bool {
+        self.open_dialog.borrow().is_some()
     }
 
     pub fn preset_page(&self, plan: &crate::models::TrainingPlan) {
@@ -707,7 +741,16 @@ impl MainWindow {
     /// Pages register confirmation AlertDialogs here so controller input is
     /// routed to them; `None` releases the registration when it closes.
     pub fn register_alert_dialog(&self, dlg: Option<(Rc<libadwaita::AlertDialog>, String)>) {
-        *self.open_dialog.borrow_mut() = dlg.map(|(d, id)| OpenDialog::AlertConfirm(d, id));
+        match dlg {
+            Some((d, id)) => {
+                *self.open_dialog.borrow_mut() = Some(OpenDialog::AlertConfirm(d, id));
+                self.set_hints_context("alert");
+            }
+            None => {
+                *self.open_dialog.borrow_mut() = None;
+                self.update_hints_visibility();
+            }
+        }
     }
 
     /// The round timer presets dialog registers itself here while open.
@@ -717,8 +760,8 @@ impl MainWindow {
     ) {
         match ctrl {
             Some(c) => {
-                *self.open_dialog.borrow_mut() = Some(OpenDialog::Presets(c));
-                self.hints_overlay.borrow_mut().set_context("presets");
+                *self.open_dialog.borrow_mut() = Some(OpenDialog::Presets(c.clone()));
+                self.set_hints_context(c.hints);
             }
             None => {
                 *self.open_dialog.borrow_mut() = None;
@@ -727,7 +770,16 @@ impl MainWindow {
         }
     }
 
-    pub fn update_hints_visibility(&self) {
+    /// Set the hint bar context (dialog registrations) — only when the
+    /// hint bar may be shown at all.
+    fn set_hints_context(&self, ctx: &str) {
+        if self.hints_enabled() {
+            self.hints_overlay.borrow_mut().set_context(ctx);
+        }
+    }
+
+    /// Whether the controller hint bar may be shown at all right now.
+    fn hints_enabled(&self) -> bool {
         let settings = load_settings();
         let connected = self
             .controller
@@ -735,9 +787,18 @@ impl MainWindow {
             .as_ref()
             .map(|c| c.connected())
             .unwrap_or(false);
+        settings.gamepad_enabled && connected && settings.gamepad_hints
+    }
 
-        if !settings.gamepad_enabled || !connected || !settings.gamepad_hints {
+    pub fn update_hints_visibility(&self) {
+        if !self.hints_enabled() {
             self.hints_overlay.borrow().hide();
+            return;
+        }
+
+        // While a dialog is open it owns the hint bar (its context was set
+        // on registration); don't overwrite it with the tab context.
+        if self.open_dialog.borrow().is_some() {
             return;
         }
 

@@ -28,11 +28,13 @@ cargo run
 
 - `controller_dpad_up/down` cycles through the page's focusable widgets in visual order.
 - `controller_dpad_left/right` adjusts the focused widget value where appropriate (spin rows, combo rows, switches).
-- `controller_a` activates the focused widget (expand/collapse rows, click buttons).
+- `controller_a` activates the focused widget (expand/collapse rows, click buttons — in the runner too: A clicks the focused Pause/+30s/Skip/Done button, and only falls back to Done/Skip when no button has focus).
 - `controller_x` toggles an expander row in the training plan editor or collapses a focused child back to its parent row.
 - `controller_b` goes back / cancels, with confirmation dialogs for stopping workouts.
 - `controller_select` opens the virtual keyboard when a text view is focused in the AI Coach.
 - `controller_start` pauses/resumes in runner, starts training in editor, saves preferences.
+
+Dialogs must register with the window (`register_exercise_picker_dialog` / `register_presets_dialog` / `register_alert_dialog`) **and unregister from a `closed` handler** — a registration left behind routes all controller input to the dead dialog forever ("gamepad freeze"). The exercise picker re-registers itself when its add-exercise form closes (the form takes over routing in the meantime). `PresetsDialogController { dialog, tracker, hints }` is the generic dialog-controller shape (presets dialog, save-preset dialog, picker add-form); its `hints` field names the hint-bar context while the dialog is open (`picker` / `presets` / `form` / `alert` in `controller_hints.rs`). While any dialog is registered, `update_hints_visibility` leaves the hint bar to the dialog; otherwise the hint context follows window tab switches *and* the plans `NavigationView` `visible-page` notify (list/editor/runner/summary) plus runner phase changes (`refresh_runner_hints`).
 
 Raw controller input is read from `/dev/input/event*` (+ `/dev/input/js*` fallback) via `src/controller_manager.rs` using `libc` ioctl/poll — this is thread-pooled with `glib::idle_add_once` used to hop back onto the main thread. Detection is capability-based (EVIOCGBIT key bitmap contains BTN_JOYSTICK/GAMEPAD codes) with a name-keyword fallback for js nodes; a 3s glib timeout rescans for hot-plugged pads, and POLLERR/HUP detaches vanished devices (`connected()` derives from the active-path set — no count races). `CONTROLLER_DEBUG=1` logs raw events + actions. Note: in `connect_local` signal handlers `args[0]` is the emitting object, not the first signal parameter (regression-tested in `ui_smoke_all`).
 
