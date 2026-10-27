@@ -28,3 +28,15 @@ modules:
       - type: dir
         path: .
       - cargo-sources.json
+      # Cargo source replacement pointing at the vendor layout extracted
+      # by cargo-sources.json (flathub-cargo-generator pattern), so the
+      # build is fully offline - no crate index/network in the sandbox.
+      - type: inline
+        dest: .cargo
+        dest-filename: config
+        contents: |
+          [source.crates-io]
+          replace-with = "vendored-sources"
+
+          [source.vendored-sources]
+          directory = "cargo/vendor"

@@ -1,6 +1,6 @@
 [package]
 name = "workout-timer"
-version = "1.4.0"
+version = "1.4.1"
 edition = "2021"
 description = "A sport training application for Linux, built with GTK 4 and libadwaita"
 license = "MIT"

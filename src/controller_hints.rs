@@ -9,22 +9,28 @@ use gtk4::{Align, Box as GtkBox, Label, Orientation};
 pub fn hints_for(context: &str, sub_key: &str) -> String {
     match context {
         "runner_exercise" => match sub_key {
-            "rest" => "[A] Done  [Y] Skip Rest  [Start] Pause  [Guide] Fullscreen".to_string(),
-            "timed" => "[Start] Pause/Resume  [B] Back  [Guide] Fullscreen".to_string(),
-            _ => "[A] Done  [Y] Skip  [B] Back  [Start] Pause  [Guide] Fullscreen".to_string(),
+            "rest" => "[A] Activate  [Y] Skip Rest  [B] Stop Training  [Start] Pause  [Guide] Fullscreen".to_string(),
+            "timed" => "[Start] Pause/Resume  [A] Activate  [B] Stop Training  [Guide] Fullscreen".to_string(),
+            _ => "[A] Activate  [Y] Skip  [B] Stop Training  [Start] Pause  [Guide] Fullscreen".to_string(),
         },
         "runner_summary" => "[A] Back to Menu  [Guide] Fullscreen".to_string(),
         "timer" => {
-            "[A] Start  [Start] Pause  [B] Skip  [X] Reset  [L1/R1] Tabs  [Guide] Fullscreen"
+            "[A] Activate  [Start] Start/Pause  [B] Skip  [X] Reset  [L1/R1] Tabs  [L3] Help  [R3] Settings  [Guide] Fullscreen"
                 .to_string()
         }
-        "list" => "[A] Open  [X] Favorite  [B] Back  [L1/R1] Tabs  [Guide] Fullscreen".to_string(),
+        "presets" => {
+            "[A] Apply  [B] Back  [Start] Start/Pause  [L1/R1] Tabs  [L3] Help  [R3] Settings  [Guide] Fullscreen".to_string()
+        }
+        "list" => "[A] Open  [X] Favorite  [Y] Duplicate  [R2] Progress  [B] Back  [L1/R1] Tabs  [L3] Help  [R3] Settings  [Guide] Fullscreen".to_string(),
+        "picker" => "[A] Select  [B] Back  [Guide] Fullscreen".to_string(),
+        "form" => "[D-Pad] Navigate  [A] Activate  [B] Cancel  [Guide] Fullscreen".to_string(),
+        "alert" => "[A] Confirm  [B] Cancel  [Guide] Fullscreen".to_string(),
         "editor" => {
-            "[A] Enter  [B] Back  [←/→] Adjust  [X] Toggle  [Start] Start Training  [L1/R1] Tabs  [Guide] Fullscreen"
+            "[A] Enter  [B] Back  [←/→] Adjust  [X] Toggle  [Start] Start Training  [L1/R1] Tabs  [L3] Help  [R3] Settings  [Guide] Fullscreen"
                 .to_string()
         }
         "ai_coach" => {
-            "[A] Submit  [B] Back  [←/→] Toggle  [Select] Keyboard  [L1/R1] Tabs  [Guide] Fullscreen"
+            "[A] Submit  [B] Back  [←/→] Toggle  [Select] Keyboard  [L1/R1] Tabs  [L3] Help  [R3] Settings  [Guide] Fullscreen"
                 .to_string()
         }
         "keyboard" => {
@@ -37,10 +43,14 @@ pub fn hints_for(context: &str, sub_key: &str) -> String {
 /// All controller contexts, in the order the help page lists them.
 pub const HINT_CONTEXTS: &[(&str, &str)] = &[
     ("timer", "Round timer"),
+    ("presets", "Timer presets dialog"),
     ("list", "Training plans"),
     ("editor", "Plan editor"),
     ("runner_exercise", "Workout runner"),
     ("runner_summary", "Workout summary"),
+    ("picker", "Exercise picker"),
+    ("form", "Dialogs with text fields"),
+    ("alert", "Confirmation dialogs"),
     ("ai_coach", "AI coach"),
     ("keyboard", "On-screen keyboard"),
 ];

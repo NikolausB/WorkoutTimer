@@ -7,6 +7,16 @@ cargo_options += ['--target-dir', meson.project_build_root() / 'target']
 cargo_options += ['--release']
 rust_target = 'release'
 
+# Honor the flatpak manifest's CARGO_HOME / CARGO_NET_OFFLINE: the
+# cargo-sources.json vendor layout lives inside that CARGO_HOME. Only
+# fall back to a build-dir cargo home for plain meson builds outside
+# flatpak (which then resolve crates over the network).
+cargo_home = run_command('sh', '-c', 'printf %s "${CARGO_HOME:-}"', check: true).stdout()
+if cargo_home == ''
+  cargo_home = meson.project_build_root() / 'cargo-home'
+endif
+cargo_net_offline = run_command('sh', '-c', 'printf %s "${CARGO_NET_OFFLINE:-false}"', check: true).stdout()
+
 custom_target(
   'cargo-build',
   build_by_default: true,
@@ -16,8 +26,8 @@ custom_target(
   install: true,
   install_dir: bindir,
   env: {
-    'CARGO_HOME': meson.project_build_root() / 'cargo-home',
-    'CARGO_NET_OFFLINE': 'false',
+    'CARGO_HOME': cargo_home,
+    'CARGO_NET_OFFLINE': cargo_net_offline,
   },
   command: [
     cargo, 'build', cargo_options, '&&',

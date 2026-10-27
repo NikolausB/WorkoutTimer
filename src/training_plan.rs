@@ -585,7 +585,6 @@ impl TrainingPlanPage {
         }
     }
 
-    #[allow(dead_code)]
     pub fn nav(&self) -> &NavigationView {
         &self.nav
     }
@@ -626,6 +625,20 @@ impl TrainingPlanPage {
     // ---------- Signals ----------
 
     fn connect_signals(&self, page_weak: std::rc::Weak<TrainingPlanPage>) {
+        // Whenever the list page becomes visible again (e.g. popped to
+        // via the NavigationView back button, which bypasses show_list),
+        // reload the plans so the list reflects edits made in the
+        // editor and finished workouts.
+        {
+            let page_weak = page_weak.clone();
+            self.nav.connect_visible_page_notify(move |_| {
+                let Some(p) = page_weak.upgrade() else { return };
+                if p.visible_page() == "list" {
+                    p.refresh_plans();
+                }
+            });
+        }
+
         // Timer tick
         {
             let page_weak = page_weak.clone();
@@ -822,10 +835,11 @@ impl TrainingPlanPage {
     // ---------- Plans list ----------
 
     pub fn refresh_plans(&self) {
-        let mut idx = 0;
-        while let Some(row) = self.plan_list_box.row_at_index(idx) {
+        // Always pop index 0: after removing a row the remaining rows
+        // shift down, so advancing the index instead would skip every
+        // second row and leave stale duplicates behind.
+        while let Some(row) = self.plan_list_box.row_at_index(0) {
             self.plan_list_box.remove(&row);
-            idx += 1;
         }
         self.star_buttons.borrow_mut().clear();
 
@@ -879,11 +893,18 @@ impl TrainingPlanPage {
             star_btn.set_valign(Align::Center);
             let store = Rc::clone(&self.store);
             let plan_id = plan.id.clone();
+            let page_weak = self.self_weak.borrow().clone();
             star_btn.connect_clicked(move |_| {
+                let Some(p) = page_weak.upgrade() else { return };
                 if let Some(mut plan) = store.get_plan(&plan_id) {
                     plan.is_favorite = !plan.is_favorite;
                     store.save_plan(&plan);
                 }
+                // Refresh immediately so the star icon and the
+                // favorites-first order update (they used to lag until the
+                // next reload), and keep focus on the same plan row.
+                p.refresh_plans();
+                p.focus_plan_row(&plan_id);
             });
             row.add_suffix(&star_btn);
             self.star_buttons
@@ -897,19 +918,12 @@ impl TrainingPlanPage {
                 .build();
             dup_btn.set_valign(Align::Center);
             {
-                let store = Rc::clone(&self.store);
-                let plan_clone = plan.clone();
                 let page_weak = self.self_weak.borrow().clone();
+                let plan_clone = plan.clone();
                 dup_btn.connect_clicked(move |_| {
-                    let mut new_plan = plan_clone.clone();
-                    new_plan.id = uuid::Uuid::new_v4().to_string();
-                    new_plan.name = format!("{} (copy)", new_plan.name);
-                    new_plan.is_favorite = false;
-                    store.save_plan(&new_plan);
                     if let Some(p) = page_weak.upgrade() {
-                        p.refresh_plans();
+                        p.duplicate_plan(&plan_clone);
                     }
-                    crate::window::show_app_toast(&format!("Duplicated \"{}\"", plan_clone.name));
                 });
             }
             row.add_suffix(&dup_btn);
@@ -917,7 +931,6 @@ impl TrainingPlanPage {
             // "Progress this plan": create a copy with increased loads based on
             // the last session of this plan.
             {
-                let store = Rc::clone(&self.store);
                 let plan_clone = plan.clone();
                 let page_weak = self.self_weak.borrow().clone();
                 let prog_btn = Button::builder()
@@ -927,29 +940,9 @@ impl TrainingPlanPage {
                     .build();
                 prog_btn.set_valign(Align::Center);
                 prog_btn.connect_clicked(move |_| {
-                    let sessions = store.load_sessions();
-                    let Some(last) = crate::analytics::last_session_for_plan(&sessions, &plan_clone)
-                    else {
-                        crate::window::show_app_toast(
-                            "Train this plan once to unlock automatic progression",
-                        );
-                        return;
-                    };
-                    let new_plan = crate::analytics::progressed_plan(&plan_clone, last);
-                    store.save_plan(&new_plan);
                     if let Some(p) = page_weak.upgrade() {
-                        p.refresh_plans();
+                        p.progress_plan(&plan_clone);
                     }
-                    let store2 = Rc::clone(&store);
-                    let new_plan_clone = new_plan.clone();
-                    crate::window::show_app_toast_action(
-                        &format!("Created \"{}\"", new_plan.name),
-                        "Undo",
-                        Rc::new(move || {
-                            store2.delete_plan(&new_plan_clone.id);
-                            crate::window::refresh_all_pages();
-                        }),
-                    );
                 });
                 row.add_suffix(&prog_btn);
             }
@@ -980,6 +973,73 @@ impl TrainingPlanPage {
         widgets.push(self.import_btn.clone().upcast());
         self.list_focus.borrow_mut().set_widgets(widgets);
         self.list_focus.borrow_mut().focus_first();
+    }
+
+    /// Move the list focus onto the row of the given plan (after a
+    /// refresh re-sorted the list).
+    fn focus_plan_row(&self, plan_id: &str) {
+        if self.visible_page() != "list" {
+            return;
+        }
+        let idx = self.plans.borrow().iter().position(|p| p.id == plan_id);
+        if let Some(idx) = idx {
+            if let Some(row) = self.plan_list_box.row_at_index(idx as i32) {
+                let row = row.upcast::<gtk4::Widget>();
+                self.list_focus.borrow_mut().move_to_widget(&row);
+            }
+        }
+    }
+
+    /// The plan under the list focus (rows and `plans` share the sorted
+    /// order), for the controller shortcut buttons.
+    fn focused_list_plan(&self) -> Option<TrainingPlan> {
+        let widget = self.list_focus.borrow().current_widget()?;
+        let row = widget.downcast_ref::<ActionRow>()?;
+        let idx = row.index();
+        let plans = self.plans.borrow();
+        if idx >= 0 && (idx as usize) < plans.len() {
+            Some(plans[idx as usize].clone())
+        } else {
+            None
+        }
+    }
+
+    /// Duplicate a plan (row copy button and the Y shortcut).
+    fn duplicate_plan(&self, plan: &TrainingPlan) {
+        let mut new_plan = plan.clone();
+        new_plan.id = uuid::Uuid::new_v4().to_string();
+        new_plan.name = format!("{} (copy)", new_plan.name);
+        new_plan.is_favorite = false;
+        self.store.save_plan(&new_plan);
+        self.refresh_plans();
+        self.focus_plan_row(&new_plan.id);
+        crate::window::show_app_toast(&format!("Duplicated \"{}\"", plan.name));
+    }
+
+    /// "Progress this plan": create a copy with increased loads based on
+    /// the last session of this plan (row button and the R2 shortcut).
+    fn progress_plan(&self, plan: &TrainingPlan) {
+        let sessions = self.store.load_sessions();
+        let Some(last) = crate::analytics::last_session_for_plan(&sessions, plan) else {
+            crate::window::show_app_toast(
+                "Train this plan once to unlock automatic progression",
+            );
+            return;
+        };
+        let new_plan = crate::analytics::progressed_plan(plan, last);
+        self.store.save_plan(&new_plan);
+        self.refresh_plans();
+        self.focus_plan_row(&new_plan.id);
+        let store = Rc::clone(&self.store);
+        let new_plan_clone = new_plan.clone();
+        crate::window::show_app_toast_action(
+            &format!("Created \"{}\"", new_plan.name),
+            "Undo",
+            Rc::new(move || {
+                store.delete_plan(&new_plan_clone.id);
+                crate::window::refresh_all_pages();
+            }),
+        );
     }
 
     // ---------- Editor ----------
@@ -1727,8 +1787,7 @@ impl TrainingPlanPage {
             self.runner_ring.set_progress(remaining / total as f64);
         }
         self.refresh_workout_bar(remaining);
-        self.runner_add30_btn
-            .set_sensitive(self.timer.is_running.get());
+        self.sync_add30();
     }
 
     fn refresh_workout_bar(&self, remaining: f64) {
@@ -1808,6 +1867,7 @@ impl TrainingPlanPage {
             self.sound
                 .play_sound(settings.get_sound("round_start_sound").as_deref());
             self.timer.start(ex.duration_seconds.unwrap());
+            self.sync_add30();
         } else {
             self.reps_revealer.set_reveal_child(true);
             self.set_phase_display("Reps", "phase-reps", COLOR_NEUTRAL);
@@ -1852,6 +1912,7 @@ impl TrainingPlanPage {
             self.sound
                 .play_sound(settings.get_sound("round_end_sound").as_deref());
             self.timer.start(ex.rest_seconds);
+            self.sync_add30();
         } else {
             self.advance_exercise();
         }
@@ -1891,6 +1952,7 @@ impl TrainingPlanPage {
 
     fn start_round_break(&self) {
         self.phase.set(Phase::RoundBreak);
+        self.refresh_runner_hints();
         self.current_round.set(self.current_round.get() + 1);
         self.current_exercise_idx.set(0);
         self.current_set.set(1);
@@ -1911,6 +1973,7 @@ impl TrainingPlanPage {
         self.sound
             .play_sound(settings.get_sound("round_end_sound").as_deref());
         self.timer.start(self.rest_between_rounds.get());
+        self.sync_add30();
     }
 
     fn finish_training(&self) {
@@ -2012,6 +2075,60 @@ impl TrainingPlanPage {
         self.start_rest();
     }
 
+    /// The pause/resume button label ("Pause" or "Resume") — used by the
+    /// ui tests to observe the runner's paused state.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn runner_pause_label(&self) -> String {
+        self.runner_pause_btn
+            .label()
+            .map(|s| s.to_string())
+            .unwrap_or_default()
+    }
+
+    /// The plan ids in the order the list shows them (favorites first) —
+    /// used by the ui tests to verify the favorites-first sorting.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn plans_order(&self) -> Vec<String> {
+        self.plans.borrow().iter().map(|p| p.id.clone()).collect()
+    }
+
+    /// Number of rows in the plans list — used by the ui tests to
+    /// verify that a refresh does not leave stale duplicate rows.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn plans_row_count(&self) -> usize {
+        let mut n = 0;
+        while self.plan_list_box.row_at_index(n as i32).is_some() {
+            n += 1;
+        }
+        n
+    }
+
+    /// Pop one nav level without the show_list bookkeeping — used by
+    /// the ui tests to simulate the NavigationView back button.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn nav_pop(&self) -> bool {
+        self.nav.pop()
+    }
+
+    /// The gamepad focus list of the runner, in visual order — used by
+    /// the ui tests to verify the +30s button is reachable.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn runner_focus_widgets(&self) -> Vec<gtk4::Widget> {
+        self.runner_focus.borrow().widgets()
+    }
+
+    /// Keep the +30s button in sync with the running timer. The gamepad
+    /// focus tracker drops insensitive widgets, so whenever the button
+    /// flips the focus list must be rebuilt — otherwise +30s stays
+    /// unreachable for the rest of the workout.
+    fn sync_add30(&self) {
+        let on = self.timer.is_running.get();
+        if self.runner_add30_btn.is_sensitive() != on {
+            self.runner_add30_btn.set_sensitive(on);
+            self.refresh_runner_focus();
+        }
+    }
+
     fn on_runner_pause(&self) {
         if self.timer.is_running.get() {
             self.timer.pause();
@@ -2024,8 +2141,7 @@ impl TrainingPlanPage {
             self.runner_ring.set_dimmed(false);
             self.runner_phase_label.remove_css_class("dim-label");
         }
-        self.runner_add30_btn
-            .set_sensitive(self.timer.is_running.get());
+        self.sync_add30();
     }
 
     fn on_runner_add30(&self) {
@@ -2041,6 +2157,7 @@ impl TrainingPlanPage {
 
     fn on_runner_skip(&self) {
         self.timer.stop();
+        self.sync_add30();
         if self.running_plan.borrow().is_none() {
             return;
         }
@@ -2157,8 +2274,12 @@ impl TrainingPlanPage {
         self.summary_exercises_box.append(&group);
     }
 
+    /// The runner hint bar is phase-dependent ([A] Done vs. rest/skip);
+    /// refresh it whenever the phase changes.
     fn refresh_runner_hints(&self) {
-        let _ = self;
+        if let Some(window) = crate::window::current_window() {
+            window.update_hints_visibility();
+        }
     }
 
     fn confirm_stop_workout(&self) {
@@ -2267,6 +2388,18 @@ impl TrainingPlanPage {
     pub fn controller_a(&self) {
         match self.visible_page() {
             "runner" => {
+                // A activates whatever runner button has focus (Pause,
+                // +30s, Skip, Done). The widget is cloned out of the
+                // borrow first: clicking rebuilds focus lists.
+                let focused = self.runner_focus.borrow().current_widget();
+                if let Some(widget) = focused {
+                    if let Some(btn) = widget.downcast_ref::<Button>() {
+                        if btn.is_sensitive() {
+                            btn.emit_clicked();
+                            return;
+                        }
+                    }
+                }
                 if self.phase.get() == Phase::Exercise {
                     if let Some(plan) = self.running_plan.borrow().clone() {
                         let ex = &plan.exercises[self.current_exercise_idx.get()];
@@ -2299,13 +2432,21 @@ impl TrainingPlanPage {
                 }
             }
             "editor" => {
-                if let Some(widget) = self.editor_focus.borrow().current_widget() {
+                // Clone the widget out before acting: activating rows or
+                // buttons emits notify signals whose handlers rebuild the
+                // focus list, and holding the borrow here would panic.
+                let widget = self.editor_focus.borrow().current_widget();
+                if let Some(widget) = widget {
                     if let Some(expander) = widget.downcast_ref::<ExpanderRow>() {
                         expander.set_expanded(!expander.is_expanded());
                     } else if let Some(btn) = widget.downcast_ref::<Button>() {
                         btn.emit_clicked();
                     } else if let Some(row) = widget.downcast_ref::<ButtonRow>() {
                         row.activate();
+                    } else if let Some(switch) = widget.downcast_ref::<SwitchRow>() {
+                        // A toggles switches, like on the round timer
+                        // page (dpad left/right toggle them too).
+                        switch.set_active(!switch.is_active());
                     } else {
                         widget.grab_focus();
                     }
@@ -2332,10 +2473,28 @@ impl TrainingPlanPage {
     }
 
     pub fn controller_y(&self) {
-        if self.visible_page() == "runner"
-            && (self.phase.get() == Phase::Exercise || self.phase.get() == Phase::Rest)
-        {
-            self.on_runner_skip();
+        match self.visible_page() {
+            "runner" => {
+                if self.phase.get() == Phase::Exercise || self.phase.get() == Phase::Rest {
+                    self.on_runner_skip();
+                }
+            }
+            "list" => {
+                if let Some(plan) = self.focused_list_plan() {
+                    self.duplicate_plan(&plan);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// R2 on the plans list: progress the focused plan (gamepad shortcut
+    /// for the per-row "progress" button).
+    pub fn controller_r2(&self) {
+        if self.visible_page() == "list" {
+            if let Some(plan) = self.focused_list_plan() {
+                self.progress_plan(&plan);
+            }
         }
     }
 
@@ -2385,7 +2544,8 @@ impl TrainingPlanPage {
         if self.visible_page() != "editor" {
             return;
         }
-        if let Some(widget) = self.editor_focus.borrow().current_widget() {
+        let widget = self.editor_focus.borrow().current_widget();
+        if let Some(widget) = widget {
             adjust_focused_widget(&widget, -1);
         }
     }
@@ -2403,14 +2563,18 @@ impl TrainingPlanPage {
         if self.visible_page() != "editor" {
             return;
         }
-        if let Some(widget) = self.editor_focus.borrow().current_widget() {
+        let widget = self.editor_focus.borrow().current_widget();
+        if let Some(widget) = widget {
             adjust_focused_widget(&widget, 1);
         }
     }
 
     pub fn controller_x(&self) {
         if self.visible_page() == "editor" {
-            if let Some(widget) = self.editor_focus.borrow().current_widget() {
+            // Same as controller_a: drop the borrow before mutating the row,
+            // the notify handler rebuilds the focus list synchronously.
+            let widget = self.editor_focus.borrow().current_widget();
+            if let Some(widget) = widget {
                 if let Some(expander) = widget.downcast_ref::<ExpanderRow>() {
                     expander.set_expanded(!expander.is_expanded());
                 } else {
@@ -2425,19 +2589,21 @@ impl TrainingPlanPage {
                 }
             }
         } else if self.visible_page() == "list" {
-            if let Some(widget) = self.list_focus.borrow().current_widget() {
+            let widget = self.list_focus.borrow().current_widget();
+            if let Some(widget) = widget {
                 if let Some(row) = widget.downcast_ref::<ActionRow>() {
                     let idx = row.index();
-                    let plans = self.plans.borrow();
-                    if idx >= 0 && (idx as usize) < plans.len() {
-                        let plan_id = plans[idx as usize].id.clone();
-                        drop(plans);
-                        if let Some(star_btn) = self.star_buttons.borrow().get(&plan_id).cloned()
-                        {
-                            if let Some(btn) = star_btn.downcast_ref::<Button>() {
-                                btn.emit_clicked();
-                            }
+                    let plan_id = {
+                        let plans = self.plans.borrow();
+                        if idx >= 0 && (idx as usize) < plans.len() {
+                            plans[idx as usize].id.clone()
+                        } else {
+                            return;
                         }
+                    };
+                    let star_btn = self.star_buttons.borrow().get(&plan_id).cloned();
+                    if let Some(btn) = star_btn.and_then(|b| b.downcast_ref::<Button>().cloned()) {
+                        btn.emit_clicked();
                     }
                 }
             }

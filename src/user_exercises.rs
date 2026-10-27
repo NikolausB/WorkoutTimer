@@ -1,12 +1,9 @@
 use crate::image_utils::UserExercise;
-use gtk4::glib;
 use std::fs;
 use std::path::PathBuf;
 
 fn user_exercises_path() -> PathBuf {
-    glib::user_data_dir()
-        .join("training-flatpak")
-        .join("user_exercises.json")
+    crate::data_store::base_data_dir().join("user_exercises.json")
 }
 
 pub fn load_user_exercises() -> Vec<UserExercise> {

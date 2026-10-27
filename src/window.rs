@@ -57,12 +57,15 @@ pub fn refresh_all_pages() {
         mw.refresh_all_pages();
     }
 }
+#[derive(Clone)]
 enum OpenDialog {
     Preferences(Rc<PreferencesDialog>),
     ExercisePicker(Rc<crate::exercise_picker::ExercisePicker>),
     /// libadwaita confirmation AlertDialogs (end training, delete plan).
     /// The String is the response id that should count as "confirm".
     AlertConfirm(Rc<libadwaita::AlertDialog>, String),
+    /// The round timer presets dialog, navigable with the gamepad.
+    Presets(Rc<crate::round_timer::PresetsDialogController>),
 }
 
 pub struct MainWindow {
@@ -72,7 +75,7 @@ pub struct MainWindow {
     resize_timeout_id: RefCell<Option<glib::SourceId>>,
 
     round_timer: Rc<RoundTimerPage>,
-    training_plan: Rc<crate::training_plan::TrainingPlanPage>,
+    pub(crate) training_plan: Rc<crate::training_plan::TrainingPlanPage>,
     history: Rc<crate::history::HistoryPage>,
     home: Rc<HomePage>,
     ai_coach: Rc<crate::ai_coach::AICoachPage>,
@@ -360,6 +363,16 @@ impl MainWindow {
                 }));
         }
 
+        {
+            let mw_weak = Rc::downgrade(&mw);
+            mw.round_timer
+                .set_presets_dialog_registrar(Rc::new(move |ctrl| {
+                    if let Some(m) = mw_weak.upgrade() {
+                        m.register_presets_dialog(ctrl);
+                    }
+                }));
+        }
+
         // Sub-pages register transient confirmation dialogs with the window
         // so controller input can be routed to them.
         {
@@ -377,6 +390,20 @@ impl MainWindow {
                         m.do_font_update();
                     }
                 }));
+        }
+
+        // The plans page navigates internally (list / editor / runner /
+        // summary); the hint bar must follow those transitions immediately,
+        // not one screen late.
+        {
+            let mw_weak = Rc::downgrade(&mw);
+            mw.training_plan
+                .nav()
+                .connect_notify_local(Some("visible-page"), move |_, _| {
+                    if let Some(m) = mw_weak.upgrade() {
+                        m.update_hints_visibility();
+                    }
+                });
         }
 
         mw.rebuild_tabs();
@@ -565,11 +592,31 @@ impl MainWindow {
         gtk4::gsk::prelude::GskRendererExt::unrealize(&renderer);
     }
 
+    /// The exercise picker registers itself here while open; `None`
+    /// releases the registration when it closes (the picker calls this
+    /// from its `closed` handler — otherwise all controller input would
+    /// keep routing to a closed dialog and the gamepad appears dead).
     pub fn register_exercise_picker_dialog(
         &self,
-        picker: Rc<crate::exercise_picker::ExercisePicker>,
+        picker: Option<Rc<crate::exercise_picker::ExercisePicker>>,
     ) {
-        *self.open_dialog.borrow_mut() = Some(OpenDialog::ExercisePicker(picker));
+        match picker {
+            Some(p) => {
+                *self.open_dialog.borrow_mut() = Some(OpenDialog::ExercisePicker(p));
+                self.set_hints_context("picker");
+            }
+            None => {
+                *self.open_dialog.borrow_mut() = None;
+                self.update_hints_visibility();
+            }
+        }
+    }
+
+    /// Whether a dialog currently owns the controller input routing
+    /// (used by the ui tests to verify registration/cleanup).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn has_open_dialog(&self) -> bool {
+        self.open_dialog.borrow().is_some()
     }
 
     pub fn preset_page(&self, plan: &crate::models::TrainingPlan) {
@@ -694,10 +741,45 @@ impl MainWindow {
     /// Pages register confirmation AlertDialogs here so controller input is
     /// routed to them; `None` releases the registration when it closes.
     pub fn register_alert_dialog(&self, dlg: Option<(Rc<libadwaita::AlertDialog>, String)>) {
-        *self.open_dialog.borrow_mut() = dlg.map(|(d, id)| OpenDialog::AlertConfirm(d, id));
+        match dlg {
+            Some((d, id)) => {
+                *self.open_dialog.borrow_mut() = Some(OpenDialog::AlertConfirm(d, id));
+                self.set_hints_context("alert");
+            }
+            None => {
+                *self.open_dialog.borrow_mut() = None;
+                self.update_hints_visibility();
+            }
+        }
     }
 
-    pub fn update_hints_visibility(&self) {
+    /// The round timer presets dialog registers itself here while open.
+    pub fn register_presets_dialog(
+        &self,
+        ctrl: Option<Rc<crate::round_timer::PresetsDialogController>>,
+    ) {
+        match ctrl {
+            Some(c) => {
+                *self.open_dialog.borrow_mut() = Some(OpenDialog::Presets(c.clone()));
+                self.set_hints_context(c.hints);
+            }
+            None => {
+                *self.open_dialog.borrow_mut() = None;
+                self.update_hints_visibility();
+            }
+        }
+    }
+
+    /// Set the hint bar context (dialog registrations) — only when the
+    /// hint bar may be shown at all.
+    fn set_hints_context(&self, ctx: &str) {
+        if self.hints_enabled() {
+            self.hints_overlay.borrow_mut().set_context(ctx);
+        }
+    }
+
+    /// Whether the controller hint bar may be shown at all right now.
+    fn hints_enabled(&self) -> bool {
         let settings = load_settings();
         let connected = self
             .controller
@@ -705,9 +787,18 @@ impl MainWindow {
             .as_ref()
             .map(|c| c.connected())
             .unwrap_or(false);
+        settings.gamepad_enabled && connected && settings.gamepad_hints
+    }
 
-        if !settings.gamepad_enabled || !connected || !settings.gamepad_hints {
+    pub fn update_hints_visibility(&self) {
+        if !self.hints_enabled() {
             self.hints_overlay.borrow().hide();
+            return;
+        }
+
+        // While a dialog is open it owns the hint bar (its context was set
+        // on registration); don't overwrite it with the tab context.
+        if self.open_dialog.borrow().is_some() {
             return;
         }
 
@@ -737,7 +828,7 @@ impl MainWindow {
         }
     }
 
-    fn on_controller_action(&self, action: &str) {
+    pub(crate) fn on_controller_action(self: &Rc<Self>, action: &str) {
         let settings = load_settings();
         if std::env::var("CONTROLLER_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
             println!("[window] controller action '{}' (gamepad_enabled={})", action, settings.gamepad_enabled);
@@ -776,11 +867,25 @@ impl MainWindow {
                 });
                 return;
             }
+            // Left/right stick click: the window-level Help and
+            // Preferences buttons, reachable from any page.
+            "l3" => {
+                self.open_help();
+                return;
+            }
+            "r3" => {
+                self.on_preferences_clicked();
+                return;
+            }
             _ => {}
         }
 
-        // Dialogs get priority
-        if let Some(dialog) = self.open_dialog.borrow().as_ref() {
+        // Dialogs get priority. The handle is cloned out of the RefCell
+        // before dispatching: closing a dialog runs its response handlers
+        // synchronously, and they unregister the dialog — a live borrow
+        // here would panic.
+        let active_dialog = self.open_dialog.borrow().clone();
+        if let Some(dialog) = active_dialog {
             match dialog {
                 OpenDialog::Preferences(p) => match action {
                     "dpad_up" => p.controller_dpad_up(),
@@ -809,6 +914,15 @@ impl MainWindow {
                     "b" | "back" => {
                         // Cancel (the default close response).
                         dlg.close();
+                    }
+                    _ => {}
+                },
+                OpenDialog::Presets(p) => match action {
+                    "dpad_up" => p.tracker.borrow_mut().cycle(-1),
+                    "dpad_down" => p.tracker.borrow_mut().cycle(1),
+                    "a" => p.activate_focused(),
+                    "b" | "back" => {
+                        p.dialog.close();
                     }
                     _ => {}
                 },
@@ -844,6 +958,7 @@ impl MainWindow {
                 "start" => self.training_plan.controller_start(),
                 "y" => self.training_plan.controller_y(),
                 "x" => self.training_plan.controller_x(),
+                "r2" => self.training_plan.controller_r2(),
                 _ => {}
             }
         } else if child.as_ptr() == self.history.widget().upcast_ref::<gtk4::Widget>().as_ptr() {
@@ -921,7 +1036,7 @@ impl MainWindow {
         self.stack.set_visible_child_name(visible_names[next_idx]);
     }
 
-    fn visible_tab(&self) -> &'static str {
+    pub(crate) fn visible_tab(&self) -> &'static str {
         let Some(child) = self.stack.visible_child() else {
             return "";
         };
@@ -1114,6 +1229,24 @@ impl MainWindow {
                 m.on_dialog_closed();
             }
         });
+    }
+
+    /// Whether the help window is open — used by the ui tests to verify
+    /// the L3 gamepad shortcut.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn help_window_open(&self) -> bool {
+        self.help_window
+            .borrow()
+            .as_ref()
+            .map(|h| h.is_open())
+            .unwrap_or(false)
+    }
+
+    /// Whether the preferences dialog is open — used by the ui tests to
+    /// verify the R3 gamepad shortcut.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn preferences_dialog_open(&self) -> bool {
+        matches!(*self.open_dialog.borrow(), Some(OpenDialog::Preferences(_)))
     }
 }
 /// Render a widget to a PNG file (debug screenshot mode).

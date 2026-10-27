@@ -28,11 +28,19 @@ cargo run
 
 - `controller_dpad_up/down` cycles through the page's focusable widgets in visual order.
 - `controller_dpad_left/right` adjusts the focused widget value where appropriate (spin rows, combo rows, switches).
-- `controller_a` activates the focused widget (expand/collapse rows, click buttons).
-- `controller_x` toggles an expander row in the training plan editor or collapses a focused child back to its parent row.
+- `controller_a` activates the focused widget (expand/collapse rows, click buttons — in the runner too: A clicks the focused Pause/+30s/Skip/Done button, and only falls back to Done/Skip when no button has focus).
+- `controller_x` toggles an expander row in the training plan editor, collapses a focused child back to its parent row, and favorites/unfavorites the focused plan in the plans list.
+- `controller_y` skips in the runner and duplicates the focused plan in the plans list.
+- `controller_r2` progresses the focused plan in the plans list (creates a "(progression)" copy via `analytics::progressed_plan`, needs a completed session).
+- `controller_l3` opens the Help window, `controller_r3` opens Preferences (window-level, any page).
+- L2/R2 are analog triggers on most pads (xpad/xpadneo/Deck emit ABS_Z/ABS_RZ axes, not BTN_TL2/TR2): `controller_manager.rs` normalizes each axis against its `EVIOCGABS` range and emits `l2`/`r2` on a rising half-press (same for js axes 2/5).
 - `controller_b` goes back / cancels, with confirmation dialogs for stopping workouts.
 - `controller_select` opens the virtual keyboard when a text view is focused in the AI Coach.
 - `controller_start` pauses/resumes in runner, starts training in editor, saves preferences.
+- Round-timer favorites are a list (`settings.favorite_presets`, multiple allowed; the legacy `favorite_preset` string is kept synced with the first entry). Each favorite renders a quick-start pill, and every pill joins the gamepad focus list via `rebuild_focus_list`. Plans sort favorites-first in `refresh_plans`, and the star/row handlers call `refresh_plans` + `focus_plan_row` so icon, order and focus update immediately.
+- `sync_add30` in `training_plan.rs` keeps the runner's +30s button sensitivity in step with the timer and rebuilds the runner focus list on flips — widget-sensitivity changes always need a focus-list rebuild (`ControllerFocusTracker` filters insensitive widgets).
+
+Dialogs must register with the window (`register_exercise_picker_dialog` / `register_presets_dialog` / `register_alert_dialog`) **and unregister from a `closed` handler** — a registration left behind routes all controller input to the dead dialog forever ("gamepad freeze"). The exercise picker re-registers itself when its add-exercise form closes (the form takes over routing in the meantime). `PresetsDialogController { dialog, tracker, hints }` is the generic dialog-controller shape (presets dialog, save-preset dialog, picker add-form); its `hints` field names the hint-bar context while the dialog is open (`picker` / `presets` / `form` / `alert` in `controller_hints.rs`). While any dialog is registered, `update_hints_visibility` leaves the hint bar to the dialog; otherwise the hint context follows window tab switches *and* the plans `NavigationView` `visible-page` notify (list/editor/runner/summary) plus runner phase changes (`refresh_runner_hints`).
 
 Raw controller input is read from `/dev/input/event*` (+ `/dev/input/js*` fallback) via `src/controller_manager.rs` using `libc` ioctl/poll — this is thread-pooled with `glib::idle_add_once` used to hop back onto the main thread. Detection is capability-based (EVIOCGBIT key bitmap contains BTN_JOYSTICK/GAMEPAD codes) with a name-keyword fallback for js nodes; a 3s glib timeout rescans for hot-plugged pads, and POLLERR/HUP detaches vanished devices (`connected()` derives from the active-path set — no count races). `CONTROLLER_DEBUG=1` logs raw events + actions. Note: in `connect_local` signal handlers `args[0]` is the emitting object, not the first signal parameter (regression-tested in `ui_smoke_all`).
 
@@ -59,7 +67,7 @@ Removed options (not loaded/saved): `show_exercise_images`, `fullscreen_mode`.
 
 - `src/progress_ring.rs`: cairo circular progress ring (runner + round timer), phase colors, `set_dimmed` for paused state.
 - `src/bar_chart.rs`: cairo bar chart used by the history page (range toggle 8 weeks/12 months × metric toggle time/volume/sessions).
-- `src/analytics.rs`: pure training analytics — Epley 1RM, volume load, work seconds, adherence, per-exercise personal records (`exercise_stats`), weekly buckets and `progressed_plan` (progressive overload: +1 rep / +2.5 kg / +5 s for completed exercises).
+- `src/analytics.rs`: pure training analytics — Epley 1RM, volume load, work seconds, adherence, per-exercise personal records (`exercise_stats`), weekly buckets and `progressed_plan` (progressive overload: +50% reps / +25% weight / +50% duration for completed exercises; an exercise bumps the first matching dimension in that order — a rep+weight exercise only gains reps).
 - `src/backup.rs`: whole-data backup/restore, merge-by-id semantics.
 - `src/help_page.rs`: "Help & Shortcuts" window; the controller hint strings live in `src/controller_hints.rs::hints_for` (single source of truth for the hint bar and the help page).
 - `src/onboarding.rs`: first-run wizard (goal/equipment/frequency) that adds matching starter plans; `settings.onboarding_done` marks it as done. The bundled default plans are only auto-seeded once the wizard ran.
@@ -97,8 +105,8 @@ Exercise images are only used as small thumbnails in the exercise picker; plan e
 
 ## Build & packaging
 
-- `Cargo.toml` at the root; `vendor/` + `.cargo/config.toml` enable offline builds; `cargo-sources.json` (generated by `flatpak-cargo-generator.py`) is referenced by the Flatpak manifests.
+- `Cargo.toml` at the root; `vendor/` + `.cargo/config.toml` are **untracked local-only** files that enable offline builds (regenerate with `cargo vendor`, never commit them — a tracked config would break every clean checkout since `vendor/` does not exist there); clean checkouts and CI resolve crates from crates.io, and the Flatpak manifests use `cargo-sources.json` (generated by `flatpak-cargo-generator.py`).
 - Flatpak manifests: `io.github.NikolausB.WorkoutTimer.yml` (offline, Flathub-style) and `local-training.yml` (network allowed during build).
 - Target runtime: `org.gnome.Platform//51`. Sdk extension is declared as `org.freedesktop.Sdk.Extension.rust-stable` WITHOUT an explicit branch — the Sdk 51 metadata (`version = 26.08`) resolves it; flatpak-builder rejects `//26.08` there.
 - Local bundle workflow: `flatpak-builder --force-clean --repo=wt-repo local-build-dir io.github.NikolausB.WorkoutTimer.yml` (needs org.gnome.Platform//51 + org.gnome.Sdk//51 + rust-stable installed), then `flatpak build-bundle wt-repo workout-timer-1.3.0.flatpak io.github.NikolausB.WorkoutTimer master` (branch is `master` — no `branch:` key in the manifest).
-- Meson (`meson.build`, `src/meson.build`) wraps cargo and installs the binary + resources.
+- Meson (`meson.build`, `src/meson.build`) wraps cargo and installs the binary + resources. `src/meson.build` honors the flatpak env (`CARGO_HOME`, `CARGO_NET_OFFLINE`) instead of overriding it; the manifest's inline `.cargo/config` source maps crates-io to the `cargo-sources.json` vendor layout (`cargo/vendor`), making Flatpak builds hermetic/offline (no network in the build sandbox).

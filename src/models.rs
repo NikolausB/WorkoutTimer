@@ -48,6 +48,15 @@ fn parse_iso_datetime(s: &str) -> Option<DateTime<Local>> {
         .or_else(|| naive_parse("%Y-%m-%dT%H:%M:%S"))
 }
 
+/// A user-saved round-timer preset (name + full timer configuration).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimerPresetEntry {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub config: RoundConfig,
+}
+
 /// One round of a custom interval list.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoundSpec {

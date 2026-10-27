@@ -160,12 +160,23 @@ impl ExercisePicker {
 
     /// Present the picker over the current window and register it for
     /// controller input (mirrors Python's `_register_controller_dialog`).
+    /// The `closed` handler unregisters it again — otherwise the window
+    /// would keep routing every gamepad action to the dead picker.
     pub fn present_over_window(self: &std::rc::Rc<Self>) {
-        if let Some(window) = crate::window::current_window() {
-            window.register_exercise_picker_dialog(self.clone());
-            let gtk_win = window.gtk_window();
-            self.dialog.present(Some(&gtk_win));
+        let Some(window) = crate::window::current_window() else {
+            return;
+        };
+        window.register_exercise_picker_dialog(Some(self.clone()));
+        {
+            let window_weak = std::rc::Rc::downgrade(&window);
+            self.dialog.connect_closed(move |_| {
+                if let Some(w) = window_weak.upgrade() {
+                    w.register_exercise_picker_dialog(None);
+                }
+            });
         }
+        let gtk_win = window.gtk_window();
+        self.dialog.present(Some(&gtk_win));
     }
 
     /// Re-apply search query + category filter to all rows.
@@ -388,7 +399,7 @@ impl ExercisePicker {
         self.dialog.close();
     }
 
-    fn show_add_exercise_form(&self) {
+    pub(crate) fn show_add_exercise_form(self: &Rc<Self>) {
         let dialog = Dialog::new();
         dialog.set_title("Add Exercise");
         dialog.set_content_width(400);
@@ -407,12 +418,16 @@ impl ExercisePicker {
         group.add(&name_row);
 
         let muscles_row = EntryRow::builder().title("Primary Muscles").build();
-        muscles_row.set_property("placeholder-text", "e.g. abdominals, quadriceps");
         group.add(&muscles_row);
 
         let equip_row = EntryRow::builder().title("Equipment").build();
-        equip_row.set_property("placeholder-text", "e.g. body only, dumbbell, kettlebells");
         group.add(&equip_row);
+
+        // Clones for the gamepad focus tracker (the originals are moved
+        // into the save handler below).
+        let name_row_tracker = name_row.clone();
+        let muscles_row_tracker = muscles_row.clone();
+        let equip_row_tracker = equip_row.clone();
 
         box_widget.append(&group);
 
@@ -512,6 +527,39 @@ impl ExercisePicker {
         box_widget.append(&save_btn);
 
         dialog.set_child(Some(&box_widget));
+
+        // Register the form so the gamepad can drive it (dpad cycles,
+        // A activates, B closes). When it closes, the still-open picker
+        // list takes input routing back.
+        if let Some(window) = crate::window::current_window() {
+            let mut tracker = crate::controller_focus::ControllerFocusTracker::new();
+            tracker.set_widgets(vec![
+                name_row_tracker.clone().upcast(),
+                muscles_row_tracker.clone().upcast(),
+                equip_row_tracker.clone().upcast(),
+                image_btn.clone().upcast(),
+                save_btn.clone().upcast(),
+            ]);
+            let tracker = Rc::new(RefCell::new(tracker));
+            tracker.borrow_mut().focus_first();
+            let controller = Rc::new(crate::round_timer::PresetsDialogController {
+                dialog: dialog.clone(),
+                tracker,
+                hints: "form",
+            });
+            window.register_presets_dialog(Some(controller));
+            let window_weak = Rc::downgrade(&window);
+            let picker_weak = self.self_weak.borrow().clone();
+            dialog.connect_closed(move |_| {
+                if let Some(w) = window_weak.upgrade() {
+                    w.register_presets_dialog(None);
+                    if let Some(p) = picker_weak.upgrade() {
+                        w.register_exercise_picker_dialog(Some(p));
+                    }
+                }
+            });
+        }
+
         let Some(root) = self.dialog.root().and_then(|r| r.dynamic_cast_ref::<gtk4::Window>().cloned()) else { return };
         dialog.present(Some(&root));
     }
