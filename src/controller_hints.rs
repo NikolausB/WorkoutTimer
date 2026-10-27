@@ -15,22 +15,22 @@ pub fn hints_for(context: &str, sub_key: &str) -> String {
         },
         "runner_summary" => "[A] Back to Menu  [Guide] Fullscreen".to_string(),
         "timer" => {
-            "[A] Activate  [Start] Start/Pause  [B] Skip  [X] Reset  [L1/R1] Tabs  [Guide] Fullscreen"
+            "[A] Activate  [Start] Start/Pause  [B] Skip  [X] Reset  [L1/R1] Tabs  [L3] Help  [R3] Settings  [Guide] Fullscreen"
                 .to_string()
         }
         "presets" => {
-            "[A] Apply  [B] Back  [Start] Start/Pause  [L1/R1] Tabs  [Guide] Fullscreen".to_string()
+            "[A] Apply  [B] Back  [Start] Start/Pause  [L1/R1] Tabs  [L3] Help  [R3] Settings  [Guide] Fullscreen".to_string()
         }
-        "list" => "[A] Open  [X] Favorite  [Y] Duplicate  [R2] Progress  [B] Back  [L1/R1] Tabs  [Guide] Fullscreen".to_string(),
+        "list" => "[A] Open  [X] Favorite  [Y] Duplicate  [R2] Progress  [B] Back  [L1/R1] Tabs  [L3] Help  [R3] Settings  [Guide] Fullscreen".to_string(),
         "picker" => "[A] Select  [B] Back  [Guide] Fullscreen".to_string(),
         "form" => "[D-Pad] Navigate  [A] Activate  [B] Cancel  [Guide] Fullscreen".to_string(),
         "alert" => "[A] Confirm  [B] Cancel  [Guide] Fullscreen".to_string(),
         "editor" => {
-            "[A] Enter  [B] Back  [←/→] Adjust  [X] Toggle  [Start] Start Training  [L1/R1] Tabs  [Guide] Fullscreen"
+            "[A] Enter  [B] Back  [←/→] Adjust  [X] Toggle  [Start] Start Training  [L1/R1] Tabs  [L3] Help  [R3] Settings  [Guide] Fullscreen"
                 .to_string()
         }
         "ai_coach" => {
-            "[A] Submit  [B] Back  [←/→] Toggle  [Select] Keyboard  [L1/R1] Tabs  [Guide] Fullscreen"
+            "[A] Submit  [B] Back  [←/→] Toggle  [Select] Keyboard  [L1/R1] Tabs  [L3] Help  [R3] Settings  [Guide] Fullscreen"
                 .to_string()
         }
         "keyboard" => {

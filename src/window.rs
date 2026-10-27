@@ -828,7 +828,7 @@ impl MainWindow {
         }
     }
 
-    pub(crate) fn on_controller_action(&self, action: &str) {
+    pub(crate) fn on_controller_action(self: &Rc<Self>, action: &str) {
         let settings = load_settings();
         if std::env::var("CONTROLLER_DEBUG").map(|v| !v.is_empty()).unwrap_or(false) {
             println!("[window] controller action '{}' (gamepad_enabled={})", action, settings.gamepad_enabled);
@@ -865,6 +865,16 @@ impl MainWindow {
                         window.fullscreen();
                     }
                 });
+                return;
+            }
+            // Left/right stick click: the window-level Help and
+            // Preferences buttons, reachable from any page.
+            "l3" => {
+                self.open_help();
+                return;
+            }
+            "r3" => {
+                self.on_preferences_clicked();
                 return;
             }
             _ => {}
@@ -1219,6 +1229,24 @@ impl MainWindow {
                 m.on_dialog_closed();
             }
         });
+    }
+
+    /// Whether the help window is open — used by the ui tests to verify
+    /// the L3 gamepad shortcut.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn help_window_open(&self) -> bool {
+        self.help_window
+            .borrow()
+            .as_ref()
+            .map(|h| h.is_open())
+            .unwrap_or(false)
+    }
+
+    /// Whether the preferences dialog is open — used by the ui tests to
+    /// verify the R3 gamepad shortcut.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn preferences_dialog_open(&self) -> bool {
+        matches!(*self.open_dialog.borrow(), Some(OpenDialog::Preferences(_)))
     }
 }
 /// Render a widget to a PNG file (debug screenshot mode).

@@ -1474,6 +1474,39 @@ mod ui_tests {
         })
     }
 
+    /// L3 opens the Help window and R3 opens Preferences, from any page
+    /// (regression for the "help/settings unreachable with the
+    /// controller" gap).
+    #[test]
+    fn l3_help_r3_settings_shortcuts() {
+        run_in_gtk(|| {
+        let _data_dir = fresh_data_dir();
+        let app = libadwaita::Application::builder().build();
+        let mw = crate::window::MainWindow::new(&app);
+        mw.gtk_window().present();
+        pump_main_loop(3);
+
+        assert!(!mw.help_window_open());
+        mw.on_controller_action("l3");
+        pump_main_loop(2);
+        assert!(mw.help_window_open(), "L3 must open the help window");
+        // B closes the help window (window-level handling).
+        mw.on_controller_action("b");
+        pump_main_loop(2);
+        assert!(!mw.help_window_open(), "B must close the help window");
+
+        assert!(!mw.preferences_dialog_open());
+        mw.on_controller_action("r3");
+        pump_main_loop(2);
+        assert!(
+            mw.preferences_dialog_open(),
+            "R3 must open the preferences dialog"
+        );
+
+        mw.gtk_window().close();
+        })
+    }
+
     /// Every context the help page lists must have hint text, and the
     /// new dialog contexts (picker, form, alert) must be listed.
     #[test]

@@ -12,6 +12,11 @@ const EV_ABS: u16 = 0x03;
 
 const ABS_X: u16 = 0x00;
 const ABS_Y: u16 = 0x01;
+// Analog triggers: on most drivers (xpad, xpadneo, DualShock/Deck) these
+// are axes, NOT BTN_TL2/BTN_TR2 buttons — R2/L2 would never fire without
+// axis handling.
+const ABS_Z: u16 = 0x02;
+const ABS_RZ: u16 = 0x05;
 const ABS_HAT0X: u16 = 0x10;
 const ABS_HAT0Y: u16 = 0x11;
 
@@ -218,6 +223,49 @@ const EVIOCGBIT0: u64 = 0x80084520;
 // EVIOCGBIT(EV_KEY, 96): full button bitmap (KEY_MAX 0x2ff → 96 bytes).
 const EVIOCGBIT_KEY: u64 = 0x80604521;
 
+// EVIOCGABS(abs) = _IOR('E', 0x40 + abs, struct input_absinfo); the
+// absinfo struct is 6 × i32 = 24 bytes.
+#[repr(C)]
+#[derive(Default)]
+struct InputAbsinfo {
+    value: i32,
+    minimum: i32,
+    maximum: i32,
+    fuzz: i32,
+    flat: i32,
+    resolution: i32,
+}
+
+fn eviocgabs(code: u16) -> u64 {
+    0x80184540 + code as u64
+}
+
+/// Read the value range of the trigger axes (ABS_Z/ABS_RZ) of an evdev
+/// device, so analog trigger presses can be normalized across drivers
+/// (xpad: 0-255, xpadneo: 0-1023, …). Falls back to the common 0-255.
+fn read_trigger_ranges(path: &str) -> std::collections::HashMap<u16, (i32, i32)> {
+    let mut ranges = std::collections::HashMap::new();
+    let fd = unsafe { libc::open(format!("{}\0", path).as_ptr() as *const i8, libc::O_RDONLY) };
+    if fd < 0 {
+        return ranges;
+    }
+    for code in [ABS_Z, ABS_RZ] {
+        let mut info = InputAbsinfo::default();
+        let ret = unsafe {
+            libc::ioctl(
+                fd,
+                eviocgabs(code) as libc::c_ulong,
+                &mut info as *mut InputAbsinfo as *mut libc::c_void,
+            )
+        };
+        if ret >= 0 && info.maximum > info.minimum {
+            ranges.insert(code, (info.minimum, info.maximum));
+        }
+    }
+    unsafe { libc::close(fd) };
+    ranges
+}
+
 fn ev_bit(buf: &[u8], bit: usize) -> bool {
     buf.get(bit / 8).map(|b| (b >> (bit % 8)) & 1 == 1).unwrap_or(false)
 }
@@ -411,9 +459,10 @@ impl ControllerManager {
             let name_clone = name.clone();
             let path_clone = path.clone();
             let btn_map_clone = btn_map.clone();
+            let trigger_ranges = read_trigger_ranges(&path);
 
             thread::spawn(move || {
-                evdev_read_loop(path_clone, name_clone, btn_map_clone, obj_weak);
+                evdev_read_loop(path_clone, name_clone, btn_map_clone, trigger_ranges, obj_weak);
             });
 
             println!("[ControllerManager] Attached evdev: {} @ {}", name, path);
@@ -484,6 +533,7 @@ fn evdev_read_loop(
     path: String,
     name: String,
     btn_map: Vec<(u16, &'static str)>,
+    trigger_ranges: std::collections::HashMap<u16, (i32, i32)>,
     manager: glib::WeakRef<ControllerManager>,
 ) {
     let fd = unsafe {
@@ -544,7 +594,7 @@ fn evdev_read_loop(
             );
         }
 
-        let action = handle_evdev_event(event, &btn_map, &mut axis_state);
+        let action = handle_evdev_event(event, &btn_map, &trigger_ranges, &mut axis_state);
         if let Some(action) = action {
             if debug_enabled() {
                 println!("[ControllerManager] -> action '{}'", action);
@@ -571,6 +621,7 @@ fn evdev_read_loop(
 fn handle_evdev_event(
     event: InputEvent,
     btn_map: &[(u16, &'static str)],
+    trigger_ranges: &std::collections::HashMap<u16, (i32, i32)>,
     axis_state: &mut std::collections::HashMap<u16, f64>,
 ) -> Option<&'static str> {
     match event.ev_type {
@@ -631,6 +682,24 @@ fn handle_evdev_event(
                         } else {
                             None
                         }
+                    } else {
+                        None
+                    }
+                }
+                ABS_Z | ABS_RZ => {
+                    // Analog triggers: normalize against the axis range
+                    // reported by the driver (default 0-255) and emit
+                    // the button on a rising half-press, like a digital
+                    // trigger.
+                    let (min, max) = trigger_ranges
+                        .get(&event.code)
+                        .copied()
+                        .unwrap_or((0, 255));
+                    let span = (max - min).max(1) as f64;
+                    let val = (event.value - min) as f64 / span;
+                    let prev_norm = (prev as i64 - min as i64) as f64 / span;
+                    if val > STICK_THRESHOLD && prev_norm <= STICK_THRESHOLD {
+                        Some(if event.code == ABS_Z { "l2" } else { "r2" })
                     } else {
                         None
                     }
@@ -744,6 +813,22 @@ fn js_read_loop(
                             Some("dpad_down")
                         } else if v < -16384 && prev >= -16384 {
                             Some("dpad_up")
+                        } else {
+                            None
+                        }
+                    }
+                    // Analog triggers (rest 0, full press 255): a
+                    // rising half-press counts as the button.
+                    2 => {
+                        if v > 127 && prev <= 127 {
+                            Some("l2")
+                        } else {
+                            None
+                        }
+                    }
+                    5 => {
+                        if v > 127 && prev <= 127 {
+                            Some("r2")
                         } else {
                             None
                         }

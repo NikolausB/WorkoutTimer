@@ -32,6 +32,8 @@ cargo run
 - `controller_x` toggles an expander row in the training plan editor, collapses a focused child back to its parent row, and favorites/unfavorites the focused plan in the plans list.
 - `controller_y` skips in the runner and duplicates the focused plan in the plans list.
 - `controller_r2` progresses the focused plan in the plans list (creates a "(progression)" copy via `analytics::progressed_plan`, needs a completed session).
+- `controller_l3` opens the Help window, `controller_r3` opens Preferences (window-level, any page).
+- L2/R2 are analog triggers on most pads (xpad/xpadneo/Deck emit ABS_Z/ABS_RZ axes, not BTN_TL2/TR2): `controller_manager.rs` normalizes each axis against its `EVIOCGABS` range and emits `l2`/`r2` on a rising half-press (same for js axes 2/5).
 - `controller_b` goes back / cancels, with confirmation dialogs for stopping workouts.
 - `controller_select` opens the virtual keyboard when a text view is focused in the AI Coach.
 - `controller_start` pauses/resumes in runner, starts training in editor, saves preferences.
